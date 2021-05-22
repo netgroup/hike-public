@@ -3,7 +3,7 @@
 #                     +------------------+      +------------------+
 #                     |        TG        |      |       SUT        |
 #                     |                  |      |                  |
-#                     |         enp6s0f0 +------+ enp6s0f0         |
+#                     |         enp6s0f0 +------+ enp6s0f0 <--- HIKe VM XDP loader
 #                     |                  |      |                  |
 #                     |                  |      |                  |
 #                     |         enp6s0f1 +------+ enp6s0f1         |
@@ -53,45 +53,11 @@ read -r -d '' tg_env <<-EOF
 	# of the bpf filesystem. If you need to get access to the bpf filesystem
 	# (where maps are available), you need to use nsenter with -m and -t
 	# that points to the pid of the parent process (launching bash).
-
-	mount -t bpf bpf /sys/fs/bpf/
-	mount -t tracefs nodev /sys/kernel/tracing
-
-	mkdir /sys/fs/bpf/progs
-	mkdir /sys/fs/bpf/maps
+	# mount -t bpf bpf /sys/fs/bpf/
+	# mount -t tracefs nodev /sys/kernel/tracing
 
 	# It allows to load maps with many entries without failing
-	ulimit -l unlimited
-	
-	# Load all the progs contained into prog.o and pin them into
-	# progs bpffs. We also pin all the maps on maps bpffs.
-	bpftool prog loadall prog.o /sys/fs/bpf/progs type xdp 		\
-		pinmaps /sys/fs/bpf/maps
-
-	## Attach the program xdp_root (pinned) to the netdev enp6s0f0 on the
-	## XDP hook.
-	#bpftool net attach xdpdrv 					\
-	#	pinned /sys/fs/bpf/progs/xdp_root dev enp6s0f0
-
-	## Let's populate the jmp_table so that we can perform tail calls!
-	#bpftool map update pinned /sys/fs/bpf/maps/jmp_table 		\
-	#	key	hex 01 00 00 00					\
-	#	value	pinned /sys/fs/bpf/progs/xdp_root
-
-	#bpftool map update pinned /sys/fs/bpf/maps/jmp_table 		\
-	#	key	hex 02 00 00 00					\
-	#	value	pinned /sys/fs/bpf/progs/xdp_2
-
-	## xdp_3 can replace program xdp_2
-	## Note that we are using the key 0x02 for overwriting the program.
-	#bpftool map update pinned /sys/fs/bpf/maps/jmp_table		\
-	#	key	hex 02 00 00 00					\
-	#	value	pinned /sys/fs/bpf/progs/xdp_3
-
-	## We unload the prog xdp_2 which is not useful anymore.
-	## Because the only reference to this program is through the fs,
-	## is enough to remove the link on the fs.
-	#rm /sys/fs/bpf/progs/xdp_2
+	# ulimit -l unlimited
 
 	/bin/bash
 EOF
@@ -117,6 +83,7 @@ ip -netns sut addr add 10.12.1.2/24 dev enp6s0f0
 ip -netns sut addr add 12:2::2/64 dev enp6s0f1
 ip -netns sut addr add 10.12.2.2/24 dev enp6s0f1
 
+export HIKECC="../hike-tools/hikecc.sh"
 
 read -r -d '' sut_env <<-EOF
 	# Everything that is private to the bash process that will be launch
@@ -125,16 +92,67 @@ read -r -d '' sut_env <<-EOF
 	# of the bpf filesystem. If you need to get access to the bpf filesystem
 	# (where maps are available), you need to use nsenter with -m and -t
 	# that points to the pid of the parent process (launching bash).
+
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
+
+	mkdir /sys/fs/bpf/progs
+	mkdir /sys/fs/bpf/maps
 
 	# It allows to load maps with many entries without failing
 	ulimit -l unlimited
 
-	# CODE HERE
+	# Load all the progs contained into prog.o and pin them into
+	# progs bpffs. We also pin all the maps on 'maps' bpffs.
+	bpftool prog loadall prog.o /sys/fs/bpf/progs type xdp 		\
+		pinmaps /sys/fs/bpf/maps
+
+	# Attach the program root hike loader (pinned) to the netdev enp6s0f0
+	# on the XDP hook.
+	bpftool net attach xdpdrv 					\
+		pinned /sys/fs/bpf/progs/hike_loader dev enp6s0f0
+
+	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
+	bpftool net attach xdpdrv 					\
+		pinned /sys/fs/bpf/progs/xdp_pass dev enp6s0f1
+
+	# Jump Map configuration (used for carring out tail calls in HIKe VM)
+	# Let's populate the gen_jmp_table so that we can perform tail calls!
+
+	# Register allow_any eBPF/HIKe Program
+	# Prog ID is defined in minimal.h; we need to parse that file and
+	# use the macro value here... but I'm lazy... are YOU brave enough
+	# to do that? :-)
+
+	bpftool map update pinned /sys/fs/bpf/maps/gen_jmp_table 	\
+		key	hex 0b 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/hvxdp_allow_any
+
+	# Register deny_any eBPF/HIKe Program, please see description above ;-)
+	bpftool map update pinned /sys/fs/bpf/maps/gen_jmp_table 	\
+		key	hex 0c 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/hvxdp_drop_any
+
+
+	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
+	# First of all we build the HIKe Chain program loader using the
+	# .hike.o object (which contains all the HIKe Chains defined so far).
+
+	# The HIKECC takes as 1) the HIKe Chains object file; 2) the eBPF map
+	# that contains all the HIKe Chains; 3) the path of the load script
+	# that is going to be generated.
+
+	${HIKECC} data/binaries/minimal_chain.hike.o			\
+		  /sys/fs/bpf/maps/hike_chain_map 			\
+		  data/binaries/minimal_chain.hike.load.sh
+
+	# Load HIKe Chains calling the loader script we just built :-o
+	/bin/bash data/binaries/minimal_chain.hike.load.sh
 
 	/bin/bash
 EOF
+
+###
 
 ## Create a new tmux session
 sleep 1
@@ -142,6 +160,6 @@ sleep 1
 tmux new-session -d -s $TMUX -n TG ip netns exec tg bash -c "${tg_env}"
 tmux new-window -t $TMUX -n SUT ip netns exec sut bash -c "${sut_env}"
 
-tmux select-window -t :0
+tmux select-window -t :1
 tmux set-option -g mouse on
 tmux attach -t $TMUX

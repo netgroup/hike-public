@@ -13,12 +13,35 @@
 #define HIKE_DEBUG 1
 #include "hike_vm.h"
 
-HIKE_PROG(chain_loader)
+/* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
+#include "minimal.h"
+
+/* Loader program is a plain eBPF XDP program meant for invoking an HIKe Chain.
+ * For the moment, the chain ID is harcoded.
+ */
+__section("hike_loader")
+int __xdp_hike_loader(struct xdp_md *ctx)
 {
-	return HIKE_XDP_VM;
+	const __u32 chain_id = HIKE_CHAIN_FOO_ID;
+	int rc;
+
+	bpf_printk(">>> HIKe VM Chain Boostrap, chain_ID=0x%x", chain_id);
+
+	rc = hike_chain_boostrap(ctx, chain_id);
+
+	bpf_printk(">>> HIKe VM Chain Boostrap, chain ID=0x%x returned=%d",
+		   chain_id, rc);
+
+	return XDP_ABORTED;
 }
-EXPORT_HIKE_PROG(chain_loader);
-EXPORT_HIKE_PROG_MAP(chain_loader, gen_jmp_table);
+
+__section("xdp_pass")
+int xdp_pass_prog(struct xdp_md *ctx)
+{
+	return XDP_PASS;
+}
+
+/* ~~~~~~~~~~~~~~~~~~~~~ XDP eBPF/HIKe programs ~~~~~~~~~~~~~~~~~~~~ */
 
 HIKE_PROG(allow_any)
 {
@@ -28,5 +51,14 @@ HIKE_PROG(allow_any)
 	return XDP_PASS;
 }
 EXPORT_HIKE_PROG(allow_any);
+
+HIKE_PROG(drop_any)
+{
+	bpf_printk("HIKe Prog: drop_any REG_1=0x%llx, REG_2=0x%llx",
+		   _I_REG(1), _I_REG(2));
+
+	return XDP_DROP;
+}
+EXPORT_HIKE_PROG(drop_any);
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

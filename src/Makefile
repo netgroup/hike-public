@@ -13,8 +13,11 @@ ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 # eBPF programs; add more eBPF programs here.
 EBPF_SRC := minimal_xdp.bpf.c
-
 EBPF_OBJ := $(OUTPUT)/${EBPF_SRC:.c=.o}
+
+# Hike Chains; add more HIKe Chains here.
+HIKE_CHAIN_SRC := minimal_chain.hike.c
+HIKE_CHAIN_OBJ := $(OUTPUT)/${HIKE_CHAIN_SRC:.c=.o}
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -41,12 +44,12 @@ endif
 
 .PHONY: all
 #all: $(APPS)
-all: $(LIBBPF_OBJ) $(EBPF_OBJ) | $(OUTPUT)
+all: $(LIBBPF_OBJ) $(EBPF_OBJ) $(HIKE_CHAIN_OBJ) | $(OUTPUT)
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS)
+	$(Q)rm -rf $(OUTPUT) #$(APPS)
 
 $(OUTPUT) $(OUTPUT)/libbpf:
 	$(call msg,MKDIR,$@)
@@ -63,6 +66,15 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 # Build BPF code
 $(OUTPUT)/%.bpf.o: $(EBPF_SRC) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,BPF,$@)
+	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
+		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
+	$(call msg,BTFDMP,$@)
+	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
+
+
+# Build the HIKe Chain code (which is eBPF code indeed)
+$(OUTPUT)/%.hike.o: $(HIKE_CHAIN_SRC) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+	$(call msg,HIKE,$@)
 	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
 		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
 

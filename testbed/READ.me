@@ -1,0 +1,28 @@
+
+On SUT there are some very simple HIKe Chains tha are invoked when a packet
+is received on the enp6s0f0 of the SUT.
+
+HIKe Chains loaded on SUT allow to skip IPv4 packets whose payload is smaller
+than 128 bytes in size. No restriction are enforced on ARP and IPv6 protos.
+
+Examples:
+
+----
+ $ ping 10.12.1.2 -c 1 -s 1024
+
+ You should see the ECHO reply.
+
+----
+ $ ping 10.12.1.2 -c 1 -s 64
+
+ You should NOT see the ECHO reply (packet should be drop on SUT).
+
+Look at the /sys/kernel/tracing/trace_pipe on SUT to see the HIKe VM debug
+trace.
+
+----
+ $ ping -c 1 12:1::2
+
+ You should see the ECHO reply.
+
+enjoy :-)
