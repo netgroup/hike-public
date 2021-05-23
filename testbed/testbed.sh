@@ -133,6 +133,10 @@ read -r -d '' sut_env <<-EOF
 		key	hex 0c 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hvxdp_drop_any
 
+	# Register count packet eBPF/HIKe Program, please see description above ;-)
+	bpftool map update pinned /sys/fs/bpf/maps/gen_jmp_table 	\
+		key	hex 0d 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/hvxdp_count_packet
 
 	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
 	# First of all we build the HIKe Chain program loader using the

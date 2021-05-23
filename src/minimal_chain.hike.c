@@ -38,7 +38,7 @@ HIKE_CHAIN_1(HIKE_CHAIN_FOO_ID)
 	}
 
 	if (eth_type == 0x86dd) {
-		/* change the TTL of the IPv4 packet */
+		/* change the TTL of the IPv6 packet */
 		hike_packet_read_u8(&hop_lim, __IPV6_HOP_LIM_ABS_OFF);
 		if (hop_lim != 64)
 			goto out;
@@ -58,10 +58,45 @@ out:
 
 HIKE_CHAIN_3(HIKE_CHAIN_BAR_ID, __u8, allow, __u16, eth_type)
 {
-	__u32 prog_id;
+	__u32 prog_id = allow ? HIKE_EBPF_PROG_ALLOW_ANY :
+				HIKE_EBPF_PROG_DROP_ANY;
+	/* FIXME: counter is an u64 but for the moment we consider it u16;
+	 * shift operators still need to be implemented in HIKe VM...
+	 */
+	__u8 override = 0;
+	__u16 counter;
 
-	prog_id = allow ? HIKE_EBPF_PROG_ALLOW_ANY : HIKE_EBPF_PROG_DROP_ANY;
+	/* let's count the number of processed packet based on the allow flag.
+	 * In counter we have the number of allowed or dropped packets, so far.
+	 */
+	counter = hike_elem_call_2(HIKE_EBPF_PROG_COUNT_PACKET, allow);
+	if (allow)
+		goto out;
+
+	if ((__s16)counter < 0) {
+		prog_id = HIKE_EBPF_PROG_DROP_ANY;
+		override = 1;
+	} else if (counter >= 32) {
+		/* when the number of dropped packet is above a given
+		 * threshold, override the prog and the alow code.
+		 */
+		prog_id = HIKE_EBPF_PROG_ALLOW_ANY;
+		override = 1;
+	}
+
+	if (override)
+		/* increase also the override counter rather than allow or
+		 * drop. We can call the same program many times (until you do
+		 * not hit the tail call limit.
+		 */
+		hike_elem_call_2(HIKE_EBPF_PROG_COUNT_PACKET, 2);
+out:
 	hike_elem_call_2(prog_id, eth_type);
 
+	/* prog_id is a final HIKe Program, we should not return from this
+	 * call. If we return from that call, it means that we have experienced
+	 * some issues... so the HIKe VM applies the default policy on such a
+	 * packet.
+	 */
 	return 0;
 }
