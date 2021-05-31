@@ -1,23 +1,34 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
-OUTPUT := .output
+OUTPUT ?= .output
+SRC_DIR ?= .
 CLANG ?= clang
+LLC ?= llc
 LLVM_STRIP ?= llvm-strip
 BPFTOOL ?= $(abspath ../tools/bpftool)
 LIBBPF_SRC := $(abspath ../libbpf/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
 INCLUDES := -I$(OUTPUT)
+HIKE_VM_INCLUDES := -I$(abspath $(shell pwd))
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
-#APPS = minimal_xdp.bpf.o
-
 # eBPF programs; add more eBPF programs here.
-EBPF_SRC := minimal_xdp.bpf.c
-EBPF_OBJ := $(OUTPUT)/${EBPF_SRC:.c=.o}
+EBPF_SRC ?= minimal_xdp.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
-HIKE_CHAIN_SRC := minimal_chain.hike.c
-HIKE_CHAIN_OBJ := $(OUTPUT)/${HIKE_CHAIN_SRC:.c=.o}
+HIKE_CHAIN_SRC ?= minimal_chain.hike.c
+
+###############################
+###### DO NOT EDIT BELOW ######
+###############################
+
+EBPF_SRC_ABS := $(addprefix $(SRC_DIR)/, $(EBPF_SRC))
+EBPF_OBJ := ${EBPF_SRC:.c=.o}
+EBPF_DST_OBJ := $(addprefix $(OUTPUT)/, $(EBPF_OBJ))
+
+HIKE_CHAIN_SRC_ABS := $(addprefix $(SRC_DIR)/, $(HIKE_CHAIN_SRC))
+HIKE_CHAIN_OBJ := ${HIKE_CHAIN_SRC:.c=.o}
+HIKE_CHAIN_DST_OBJ := $(addprefix $(OUTPUT)/, $(HIKE_CHAIN_OBJ))
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -42,14 +53,18 @@ else
 	MAKEFLAGS += --no-print-directory
 endif
 
-.PHONY: all
-#all: $(APPS)
-all: $(LIBBPF_OBJ) $(EBPF_OBJ) $(HIKE_CHAIN_OBJ) | $(OUTPUT)
+.PHONY: all libbpf hikeprog hikechain
+
+all: libbpf prog chain | $(OUTPUT)
+
+chain: $(HIKE_CHAIN_DST_OBJ)
+prog: $(EBPF_DST_OBJ)
+libbpf: $(LIBBPF_OBJ)
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) #$(APPS)
+	$(Q)rm -rf $(OUTPUT)
 
 $(OUTPUT) $(OUTPUT)/libbpf:
 	$(call msg,MKDIR,$@)
@@ -64,39 +79,36 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 		    install
 
 # Build BPF code
-$(OUTPUT)/%.bpf.o: $(EBPF_SRC) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
-	$(call msg,BPF,$@)
-	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
-		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
-	$(call msg,BTFDMP,$@)
-	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
+$(EBPF_DST_OBJ): $(EBPF_SRC_ABS) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+	$(call msg,PROG,$@)
+	$(Q)$(CLANG) -g -Wall -O2 -target bpf -D__TARGET_ARCH_$(ARCH)	      \
+		$(INCLUDES) $(HIKE_VM_INCLUDES) $(CLANG_BPF_SYS_INCLUDES)     \
+		-c $< -o $@
 
+#	$(call msg,BTFDMP,$@)
+#	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
+#	$(CLANG) -S \
+#	    -target bpf \
+#	    -D __BPF_TRACING__ \
+#	    $(INCLUDES) \
+#	    $(CLANG_BPF_SYS_INCLUDES) \
+#	    $(BPF_CFLAGS) \
+#	    -Wall \
+#	    -Wno-unused-value \
+#	    -Wno-pointer-sign \
+#	    -Wno-compare-distinct-pointer-types \
+#	    -Werror \
+#	    -O2 -emit-llvm -c -g -o ${@:.o=.ll} $<
+#	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
 # Build the HIKe Chain code (which is eBPF code indeed)
-$(OUTPUT)/%.hike.o: $(HIKE_CHAIN_SRC) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
-	$(call msg,HIKE,$@)
-	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) \
-		$(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
+$(HIKE_CHAIN_DST_OBJ): $(HIKE_CHAIN_SRC_ABS) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+	$(call msg,CHAIN,$@)
+	$(Q)$(CLANG) -g -Wall -O2 -target bpf -D__TARGET_ARCH_$(ARCH)	      \
+		$(INCLUDES) $(HIKE_VM_INCLUDES) $(CLANG_BPF_SYS_INCLUDES)     \
+		-c $< -o $@
 
 #$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
-
-# Generate BPF skeletons
-#$(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT)
-#	$(call msg,GEN-SKEL,$@)
-#	$(Q)$(BPFTOOL) gen skeleton $< > $@
-
-# Build user-space code
-#$(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
-
-#$(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
-#	$(call msg,CC,$@)
-#	$(Q)$(CC) $(CFLAGS) $(INCLUDES) -c $(filter %.c,$^) -o $@
-
-# Build application binary
-#$(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
-#	$(call msg,BINARY,$@)
-#	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -o $@
-
 
 # delete failed targets
 .DELETE_ON_ERROR:
