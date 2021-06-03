@@ -41,6 +41,7 @@ ip -netns tg link set dev enp6s0f0 up
 ip -netns tg link set dev enp6s0f1 up
 
 ip -netns tg addr add 12:1::1/64 dev enp6s0f0
+ip -netns tg addr add fc01::1/64 dev enp6s0f0
 ip -netns tg addr add 10.12.1.1/24 dev enp6s0f0
 
 ip -netns tg addr add 12:2::1/64 dev enp6s0f1
@@ -78,6 +79,7 @@ ip -netns sut link set dev enp6s0f0 up
 ip -netns sut link set dev enp6s0f1 up
 
 ip -netns sut addr add 12:1::2/64 dev enp6s0f0
+ip -netns sut addr add fc01::2/64 dev enp6s0f0
 ip -netns sut addr add 10.12.1.2/24 dev enp6s0f0
 
 ip -netns sut addr add 12:2::2/64 dev enp6s0f1
@@ -96,25 +98,45 @@ read -r -d '' sut_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	mkdir /sys/fs/bpf/progs
-	mkdir /sys/fs/bpf/maps
+	# With bpftool we cannot pin maps which have been already pinned
+	# on the same bpffs. The same also applies to eBPF programs.
+	# For this reason, we create {init,net} dirs in progs and
+	# {init,net} in maps.
+	#
+	mkdir -p /sys/fs/bpf/progs/init
+	mkdir -p /sys/fs/bpf/progs/net
+
+	mkdir -p /sys/fs/bpf/maps/init
+	mkdir -p /sys/fs/bpf/maps/net
 
 	# It allows to load maps with many entries without failing
 	ulimit -l unlimited
 
-	# Load all the progs contained into prog.o and pin them into
-	# progs bpffs. We also pin all the maps on 'maps' bpffs.
-	bpftool prog loadall prog.o /sys/fs/bpf/progs type xdp 		\
-		pinmaps /sys/fs/bpf/maps
+	# Load all the classifiers
+	bpftool prog loadall classifier.o /sys/fs/bpf/progs/init type xdp \
+		pinmaps /sys/fs/bpf/maps/init
 
-	# Attach the program root hike loader (pinned) to the netdev enp6s0f0
-	# on the XDP hook.
+	# Load all the progs contained into net.o and pin them on the bpffs.
+	# ALl programs contained in net.o must reuse the maps that have been
+	# already created and pinned by the classifier. Indeed, we specify
+	# the maps that have to be re-bound to programs contained in progs.o
+	#
+	bpftool prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
+		map name gen_jmp_table					\
+			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
+		map name hike_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
+		map name pcpu_hike_chain_data_map			\
+			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
+		pinmaps /sys/fs/bpf/maps/net
+
+	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv 					\
-		pinned /sys/fs/bpf/progs/hike_loader dev enp6s0f0
+		pinned /sys/fs/bpf/progs/init/hike_classifier dev enp6s0f0
 
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
 	bpftool net attach xdpdrv 					\
-		pinned /sys/fs/bpf/progs/xdp_pass dev enp6s0f1
+		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
 	# Let's populate the gen_jmp_table so that we can perform tail calls!
@@ -124,19 +146,19 @@ read -r -d '' sut_env <<-EOF
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
 		key	hex 0b 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/hvxdp_allow_any
+		value	pinned /sys/fs/bpf/progs/net/hvxdp_allow_any
 
 	# Register deny_any eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
 		key	hex 0c 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/hvxdp_drop_any
+		value	pinned /sys/fs/bpf/progs/net/hvxdp_drop_any
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
 		key	hex 0d 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/hvxdp_count_packet
+		value	pinned /sys/fs/bpf/progs/net/hvxdp_count_packet
 
 	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
 	# First of all we build the HIKe Chain program loader using the
@@ -147,11 +169,14 @@ read -r -d '' sut_env <<-EOF
 	# that is going to be generated.
 
 	${HIKECC} data/binaries/minimal_chain.hike.o			\
-		  /sys/fs/bpf/maps/hike_chain_map 			\
+		  /sys/fs/bpf/maps/init/hike_chain_map 			\
 		  data/binaries/minimal_chain.hike.load.sh
 
 	# Load HIKe Chains calling the loader script we just built :-o
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
+
+	# Load the classifier map config for IPv6 addresses
+	/bin/bash data/classifier_config.load.sh
 
 	/bin/bash
 EOF

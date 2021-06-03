@@ -100,3 +100,16 @@ out:
 	 */
 	return 0;
 }
+
+HIKE_CHAIN_1(HIKE_CHAIN_BAZ_ID)
+{
+#define __ETH_PROTO_TYPE_ABS_OFF	12
+	__u16 eth_type;
+
+	hike_packet_read_u16(&eth_type, __ETH_PROTO_TYPE_ABS_OFF);
+
+	hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, eth_type);
+
+	return 0;
+#undef __ETH_PROTO_TYPE_ABS_OFF
+}

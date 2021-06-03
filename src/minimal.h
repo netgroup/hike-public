@@ -13,4 +13,6 @@
 #define HIKE_CHAIN_FOO_ID		76 /* 0x4c */
 #define HIKE_CHAIN_BAR_ID		77 /* 0x4d */
 
+#define HIKE_CHAIN_BAZ_ID		78 /* 0x4e */
+
 #endif
