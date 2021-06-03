@@ -13,7 +13,7 @@ CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 # eBPF programs; add more eBPF programs here.
-EBPF_SRC ?= minimal_xdp.bpf.c
+EBPF_SRC ?= minimal_xdp.bpf.c minimal_classifier.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c
@@ -22,11 +22,9 @@ HIKE_CHAIN_SRC ?= minimal_chain.hike.c
 ###### DO NOT EDIT BELOW ######
 ###############################
 
-EBPF_SRC_ABS := $(addprefix $(SRC_DIR)/, $(EBPF_SRC))
 EBPF_OBJ := ${EBPF_SRC:.c=.o}
 EBPF_DST_OBJ := $(addprefix $(OUTPUT)/, $(EBPF_OBJ))
 
-HIKE_CHAIN_SRC_ABS := $(addprefix $(SRC_DIR)/, $(HIKE_CHAIN_SRC))
 HIKE_CHAIN_OBJ := ${HIKE_CHAIN_SRC:.c=.o}
 HIKE_CHAIN_DST_OBJ := $(addprefix $(OUTPUT)/, $(HIKE_CHAIN_OBJ))
 
@@ -78,15 +76,17 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 		    INCLUDEDIR= LIBDIR= UAPIDIR=			      \
 		    install
 
-# Build BPF code
-$(EBPF_DST_OBJ): $(EBPF_SRC_ABS) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+# Build the absolute SRC path directly from the object filename
+abs_src_path = $(addprefix $(SRC_DIR)/,${1:.o=.c})
+
+$(EBPF_DST_OBJ): $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,PROG,$@)
 	$(Q)$(CLANG) -g -Wall -O2 -target bpf -D__TARGET_ARCH_$(ARCH)	      \
 		$(INCLUDES) $(HIKE_VM_INCLUDES) $(CLANG_BPF_SYS_INCLUDES)     \
-		-c $< -o $@
+		-c $(call abs_src_path,$(@F)) -o $@
+	$(call msg,BTFDMP,$@)
+	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
 
-#	$(call msg,BTFDMP,$@)
-#	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
 #	$(CLANG) -S \
 #	    -target bpf \
 #	    -D __BPF_TRACING__ \
@@ -95,18 +95,20 @@ $(EBPF_DST_OBJ): $(EBPF_SRC_ABS) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUT
 #	    $(BPF_CFLAGS) \
 #	    -Wall \
 #	    -Wno-unused-value \
+#	    -Wno-unused-function \
 #	    -Wno-pointer-sign \
 #	    -Wno-compare-distinct-pointer-types \
 #	    -Werror \
-#	    -O2 -emit-llvm -c -g -o ${@:.o=.ll} $<
+#	    -O2 -emit-llvm -c $(@F:.o=.c) -g -o ${@:.o=.ll}
 #	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
+
 # Build the HIKe Chain code (which is eBPF code indeed)
-$(HIKE_CHAIN_DST_OBJ): $(HIKE_CHAIN_SRC_ABS) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+$(HIKE_CHAIN_DST_OBJ): $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,CHAIN,$@)
 	$(Q)$(CLANG) -g -Wall -O2 -target bpf -D__TARGET_ARCH_$(ARCH)	      \
 		$(INCLUDES) $(HIKE_VM_INCLUDES) $(CLANG_BPF_SYS_INCLUDES)     \
-		-c $< -o $@
+		-c $(call abs_src_path,$(@F)) -o $@
 
 #$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
 
