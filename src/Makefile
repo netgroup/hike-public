@@ -79,12 +79,17 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 # Build the absolute SRC path directly from the object filename
 abs_src_path = $(addprefix $(SRC_DIR)/,${1:.o=.c})
 
-$(EBPF_DST_OBJ): $(addprefix $(SRC_DIR)/,$(EBPF_SRC)) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+$(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) \
+				 $(wildcard *.h) vmlinux.h | $(OUTPUT)
 	$(call msg,PROG,$@)
-	$(Q)$(CLANG) -g -Wall -Wno-unused-function 		\
-		-O2 -target bpf -D__TARGET_ARCH_$(ARCH)		\
-		$(INCLUDES) $(HIKE_VM_INCLUDES) $(CLANG_BPF_SYS_INCLUDES) \
-		-c $(call abs_src_path,$(@F)) -o $@
+	$(Q)$(CLANG) -g						\
+		-Wall						\
+		-Wno-unused-function 				\
+		-O2 -target bpf 				\
+		-D__TARGET_ARCH_$(ARCH)				\
+		$(INCLUDES) $(HIKE_VM_INCLUDES)			\
+		$(CLANG_BPF_SYS_INCLUDES)			\
+		-c $< -o $@
 	$(call msg,BTFDMP,$@)
 	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
 
@@ -105,11 +110,16 @@ $(EBPF_DST_OBJ): $(addprefix $(SRC_DIR)/,$(EBPF_SRC)) $(LIBBPF_OBJ) $(wildcard %
 
 
 # Build the HIKe Chain code (which is eBPF code indeed)
-$(HIKE_CHAIN_DST_OBJ): $(addprefix $(SRC_DIR)/,$(HIKE_CHAIN_SRC)) $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+$(addprefix $(OUTPUT)/,%.hike.o): $(addprefix $(SRC_DIR)/,%.hike.c) $(LIBBPF_OBJ) \
+				  $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,CHAIN,$@)
-	$(Q)$(CLANG) -g -Wall -O2 -target bpf -D__TARGET_ARCH_$(ARCH)	      \
-		$(INCLUDES) $(HIKE_VM_INCLUDES) $(CLANG_BPF_SYS_INCLUDES)     \
-		-c $(call abs_src_path,$(@F)) -o $@
+	$(Q)$(CLANG) -g						\
+		-Wall						\
+		-O2 -target bpf 				\
+		-D__TARGET_ARCH_$(ARCH)				\
+		$(INCLUDES) $(HIKE_VM_INCLUDES)			\
+		$(CLANG_BPF_SYS_INCLUDES)			\
+		-c $< -o $@
 
 #$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
 
