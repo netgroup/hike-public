@@ -84,7 +84,6 @@ $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) 
 	$(call msg,PROG,$@)
 	$(Q)$(CLANG) -g						\
 		-Wall						\
-		-Wno-unused-function 				\
 		-O2 -target bpf 				\
 		-D__TARGET_ARCH_$(ARCH)				\
 		$(INCLUDES) $(HIKE_VM_INCLUDES)			\
