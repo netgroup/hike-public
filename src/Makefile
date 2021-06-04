@@ -90,7 +90,7 @@ $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) 
 		$(CLANG_BPF_SYS_INCLUDES)			\
 		-c $< -o $@
 	$(call msg,BTFDMP,$@)
-	$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
+	$(Q)$(BPFTOOL) btf dump file $@ -j -p > ${@:.o=.json}
 
 #	$(CLANG) -S \
 #	    -target bpf \
