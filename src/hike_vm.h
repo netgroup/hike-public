@@ -1264,8 +1264,7 @@ static __always_inline int __hike_mem_op_size(__u8 opsize)
 }
 
 static __always_inline int
-__hike_memory_xdp_packet_rw(enum hike_memory_access_mode mode, int size,
-			    __u64 *ref, void *ptr, void *end)
+__hike_memory_xdp_packet_load(int size, __u64 *ref, void *ptr, void *end)
 {
 #define ___hike_memory_case_load(RC, TYPE, DST, PTR, END)		\
 	case (sizeof(TYPE)):						\
@@ -1277,6 +1276,25 @@ __hike_memory_xdp_packet_rw(enum hike_memory_access_mode mode, int size,
 		RC = 0;							\
 		break
 
+	int rc;
+
+	switch(size) {
+	___hike_memory_case_load(rc, __u8,  *ref, ptr, end);
+	___hike_memory_case_load(rc, __u16, *ref, ptr, end);
+	___hike_memory_case_load(rc, __u32, *ref, ptr, end);
+	___hike_memory_case_load(rc, __u64, *ref, ptr, end);
+	default:
+		return -EFAULT;
+	}
+
+	return rc;
+
+#undef ___hike_memory_case_load
+}
+
+static __always_inline int
+__hike_memory_xdp_packet_store(int size, __u64 val, void *ptr, void *end)
+{
 #define ___hike_memory_case_store(RC, TYPE, PTR, SRC, END)		\
 	case (sizeof(TYPE)):						\
 		if ((PTR) + sizeof(TYPE) > (END)) {			\
@@ -1289,46 +1307,23 @@ __hike_memory_xdp_packet_rw(enum hike_memory_access_mode mode, int size,
 
 	int rc;
 
-	switch (mode) {
-	case HIKE_MEMORY_ACCESS_READ:
-		switch(size) {
-		___hike_memory_case_load(rc, __u8,  *ref, ptr, end);
-		___hike_memory_case_load(rc, __u16, *ref, ptr, end);
-		___hike_memory_case_load(rc, __u32, *ref, ptr, end);
-		___hike_memory_case_load(rc, __u64, *ref, ptr, end);
-		default:
-			return -EFAULT;
-		}
-
-		return rc; /* end of HIKE_MEMORY_ACCESS_READ */
-
-	case HIKE_MEMORY_ACCESS_WRITE:
-		switch(size) {
-		___hike_memory_case_store(rc, __u8,  ptr, *ref, end);
-		___hike_memory_case_store(rc, __u16, ptr, *ref, end);
-		___hike_memory_case_store(rc, __u32, ptr, *ref, end);
-		___hike_memory_case_store(rc, __u64, ptr, *ref, end);
-		default:
-			return -EFAULT;
-		}
-
-		return rc; /* end of HIKE_MEMORY_ACCESS_WRITE */
-
+	switch(size) {
+	___hike_memory_case_store(rc, __u8,  ptr, val, end);
+	___hike_memory_case_store(rc, __u16, ptr, val, end);
+	___hike_memory_case_store(rc, __u32, ptr, val, end);
+	___hike_memory_case_store(rc, __u64, ptr, val, end);
 	default:
 		return -EFAULT;
 	}
 
-	/* BUG if we land here */
-	return -EBADF;
+	return rc;
 
-#undef ___hike_memory_case_load
 #undef ___hike_memory_case_store
 }
 
 static __always_inline int
-__hike_memory_xdp_packet(struct xdp_md *ctx, __u64 *ref,
-			 const struct vaddr_info *vinfo, int size,
-			 enum hike_memory_access_mode mode)
+__hike_memory_xdp_packet_read(struct xdp_md *ctx, __u64 *ref,
+			      const struct vaddr_info *vinfo, int size)
 {
 	void *data_end = (void *)(unsigned long)ctx->data_end;
 	void *data = (void *)(unsigned long)ctx->data;
@@ -1339,10 +1334,6 @@ __hike_memory_xdp_packet(struct xdp_md *ctx, __u64 *ref,
 
 	switch (off) {
 	case HIKE_MEM_PACKET_OFF_LEN:
-		if (mode != HIKE_MEMORY_ACCESS_READ)
-			/* writing on len does nothing... */
-			return 0;
-
 		/* this value can be accessed only if read is aligned and starts
 		 * from the beginning of the slot.
 		 */
@@ -1362,8 +1353,7 @@ __hike_memory_xdp_packet(struct xdp_md *ctx, __u64 *ref,
 		      HIKE_MEM_BANK_PACKET_DATA_SIZE;
 		ptr = data + off;
 
-		return __hike_memory_xdp_packet_rw(mode, size, ref, ptr,
-						   data_end);
+		return __hike_memory_xdp_packet_load(size, ref, ptr, data_end);
 	}
 
 	/* BUG if we land here */
@@ -1371,8 +1361,42 @@ __hike_memory_xdp_packet(struct xdp_md *ctx, __u64 *ref,
 }
 
 static __always_inline int
-__hike_memory_rw(enum hike_memory_access_mode mode, int size,
-		 __u64 *ref, void *ptr, __u32 off, int len)
+__hike_memory_xdp_packet_write(struct xdp_md *ctx, __u64 val,
+			       const struct vaddr_info *vinfo, int size)
+{
+	void *data_end = (void *)(unsigned long)ctx->data_end;
+	void *data = (void *)(unsigned long)ctx->data;
+	void *ptr;
+	__u32 off;
+
+	off = vinfo->off;
+
+	switch (off) {
+	case HIKE_MEM_PACKET_OFF_LEN:
+		return 0;
+
+	/* any other slot falls into DATA */
+	default:
+		if (off < HIKE_MEM_PACKET_OFF_DATA_START)
+			return -ENOMEM;
+	/* fallthrough */
+	case HIKE_MEM_PACKET_OFF_DATA_START:
+		/* we have to take into account the field offset so that we can
+		 * subtract it from the virtual address.
+		 */
+		off = HIKE_MEM_BANK_PACKET_ADJUST_OFF(off, data) &
+		      HIKE_MEM_BANK_PACKET_DATA_SIZE;
+		ptr = data + off;
+
+		return __hike_memory_xdp_packet_store(size, val, ptr, data_end);
+	}
+
+	/* BUG if we land here */
+	return -EBADF;
+}
+
+static __always_inline int
+__hike_memory_load(int size, __u64 *ref, void *ptr, __u32 off, int len)
 {
 #define ___hike_memory_case_load(RC, TYPE, DST, PTR, OFF, LEN)		\
 	case (sizeof(TYPE)):						\
@@ -1384,6 +1408,25 @@ __hike_memory_rw(enum hike_memory_access_mode mode, int size,
 		RC = 0;							\
 		break
 
+	int rc;
+
+	switch(size) {
+	___hike_memory_case_load(rc, __u8,  *ref, ptr, off, len);
+	___hike_memory_case_load(rc, __u16, *ref, ptr, off, len);
+	___hike_memory_case_load(rc, __u32, *ref, ptr, off, len);
+	___hike_memory_case_load(rc, __u64, *ref, ptr, off, len);
+	default:
+		return -EFAULT;
+	}
+
+	return rc;
+
+#undef ___hike_memory_case_load
+}
+
+static __always_inline int
+__hike_memory_store(int size, __u64 val, void *ptr, __u32 off, int len)
+{
 #define ___hike_memory_case_store(RC, TYPE, PTR, OFF, SRC, LEN)		\
 	case (sizeof(TYPE)):						\
 		if ((OFF) + sizeof(TYPE) > (LEN)) {			\
@@ -1396,46 +1439,24 @@ __hike_memory_rw(enum hike_memory_access_mode mode, int size,
 
 	int rc;
 
-	switch (mode) {
-	case HIKE_MEMORY_ACCESS_READ:
-		switch(size) {
-		___hike_memory_case_load(rc, __u8,  *ref, ptr, off, len);
-		___hike_memory_case_load(rc, __u16, *ref, ptr, off, len);
-		___hike_memory_case_load(rc, __u32, *ref, ptr, off, len);
-		___hike_memory_case_load(rc, __u64, *ref, ptr, off, len);
-		default:
-			return -EFAULT;
-		}
-
-		return rc; /* end of HIKE_MEMORY_ACCESS_READ */
-
-	case HIKE_MEMORY_ACCESS_WRITE:
-		switch(size) {
-		___hike_memory_case_store(rc, __u8,  ptr, off, *ref, len);
-		___hike_memory_case_store(rc, __u16, ptr, off, *ref, len);
-		___hike_memory_case_store(rc, __u32, ptr, off, *ref, len);
-		___hike_memory_case_store(rc, __u64, ptr, off, *ref, len);
-		default:
-			return -EFAULT;
-		}
-
-		return rc; /* end of HIKE_MEMORY_ACCESS_WRITE */
-
+	switch(size) {
+	___hike_memory_case_store(rc, __u8,  ptr, off, val, len);
+	___hike_memory_case_store(rc, __u16, ptr, off, val, len);
+	___hike_memory_case_store(rc, __u32, ptr, off, val, len);
+	___hike_memory_case_store(rc, __u64, ptr, off, val, len);
 	default:
 		return -EFAULT;
 	}
 
-	/* BUG if we land here */
-	return -EBADF;
+	return rc;
 
-#undef ___hike_memory_case_load
 #undef ___hike_memory_case_store
 }
 
+
 static __always_inline int
-__hike_memory_chain_stack(struct hike_chain_data *chain_data, __u64 *ref,
-			  const struct vaddr_info *vinfo, int size,
-			  enum hike_memory_access_mode mode)
+__hike_memory_chain_stack_read(struct hike_chain_data *chain_data, __u64 *ref,
+			       const struct vaddr_info *vinfo, int size)
 {
 	struct hike_chain *cur_chain;
 	void *stack;
@@ -1448,15 +1469,30 @@ __hike_memory_chain_stack(struct hike_chain_data *chain_data, __u64 *ref,
 	if (!stack)
 		return -ENOMEM;
 
-	return __hike_memory_rw(mode, size, ref, stack, vinfo->off,
-				HIKE_CHAIN_REGMEM_STACK_SIZE);
+	return __hike_memory_load(size, ref, stack, vinfo->off,
+				  HIKE_CHAIN_REGMEM_STACK_SIZE);
 }
 
-/* XXX: ugly but necessary to avoid the compiler from creating a __hike_mmu
- * function with very limited stack. This limitation makes the verifier
- * unhappy reporting the error: "invalid read from stack off %d+0 size %d".
- */
-#define __hike_mmu(CTX, REF, VADDR, LDSIZE, MODE) 			\
+static __always_inline int
+__hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
+			       const struct vaddr_info *vinfo, int size)
+{
+	struct hike_chain *cur_chain;
+	void *stack;
+
+	cur_chain =  __hike_get_active_chain(chain_data);
+	if (!cur_chain)
+		return -ENOBUFS;
+
+	stack = __ACCESS_REGMEM_STACK(&cur_chain->regmem);
+	if (!stack)
+		return -ENOMEM;
+
+	return __hike_memory_store(size, val, stack, vinfo->off,
+				  HIKE_CHAIN_REGMEM_STACK_SIZE);
+}
+
+#define __hike_mmu_read(CTX, REF, VADDR, LDSIZE) 			\
 ({									\
 	int __rc = -EBADF;						\
 	do {								\
@@ -1470,14 +1506,49 @@ __hike_memory_chain_stack(struct hike_chain_data *chain_data, __u64 *ref,
 		}							\
 		switch (__vinfo->bank_id) {				\
 		case HIKE_MEM_BID_PACKET: 				\
-			__rc = __hike_memory_xdp_packet((CTX)->ctx,	\
-							(REF), __vinfo, \
-							__size, (MODE));\
+			__rc = __hike_memory_xdp_packet_read(		\
+					(CTX)->ctx, (REF), __vinfo,	\
+					__size);			\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_STACK:				\
-			__rc = __hike_memory_chain_stack((CTX)->chain_data,\
-							 (REF), __vinfo,\
-							 __size, (MODE));\
+			__rc = __hike_memory_chain_stack_read(		\
+					(CTX)->chain_data, (REF),	\
+					__vinfo, __size);		\
+			break;	/* exit from the switch case */		\
+		case HIKE_MEM_BID_ZERO:					\
+		case HIKE_MEM_BID_PRIVATE:				\
+		case HIKE_MEM_BID_SHARED:				\
+		default:						\
+			__rc = -ENOMEM;					\
+			break;	/* exit from the switch case */		\
+		}							\
+	} while(0);							\
+									\
+	__rc;								\
+})
+
+#define __hike_mmu_write(CTX, REF, VADDR, LDSIZE) 			\
+({									\
+	int __rc = -EBADF;						\
+	do {								\
+		struct vaddr_info *__vinfo = PTR_U32_TO_PTR_VADDR(VADDR);\
+		int __size = __hike_mem_op_size(LDSIZE);		\
+									\
+		if (__size <= 0) {					\
+			/* BUG if size == 0 */				\
+			__rc = !__size ? -EFAULT : __size; 		\
+			break;						\
+		}							\
+		switch (__vinfo->bank_id) {				\
+		case HIKE_MEM_BID_PACKET: 				\
+			__rc = __hike_memory_xdp_packet_write(		\
+					(CTX)->ctx, (REF), __vinfo,	\
+					__size);			\
+			break;	/* exit from the switch case */		\
+		case HIKE_MEM_BID_STACK:				\
+			__rc = __hike_memory_chain_stack_write(		\
+					(CTX)->chain_data, (REF),	\
+					__vinfo, __size);		\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_ZERO:					\
 		case HIKE_MEM_BID_PRIVATE:				\
@@ -1692,8 +1763,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		 */
 		reg_val += offset;
 
-		rc = __hike_mmu(&hike_ctx, reg_ref, &reg_val, ldsize,
-				HIKE_MEMORY_ACCESS_READ);
+		rc = __hike_mmu_read(&hike_ctx, reg_ref, &reg_val, ldsize);
 		if (rc < 0)
 			return rc;
 
@@ -1709,11 +1779,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_STX | HIKE_MEM | HIKE_W:
 	case HIKE_STX | HIKE_MEM | HIKE_H:
 	case HIKE_STX | HIKE_MEM | HIKE_B: {
-		/* Compiler and optimizer emit code which doesn't like the
-		 * verfier... this avoids making the verifier work with shift
-		 * operations on pointers which are prohibited.
-		 */
-		volatile __u64 store;
+		__u64 store;
 
 		ldsize = HIKE_SIZE(opcode);
 		dst_reg = insn->hic_dst;
@@ -1725,8 +1791,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			break;
 		case HIKE_STX:
 			src_reg = insn->hic_src;
-			rc = __hike_chain_load_reg(cur_chain, src_reg,
-						   (__u64 *)&store);
+			rc = __hike_chain_load_reg(cur_chain, src_reg, &store);
 			if (rc < 0)
 				return rc;
 			break;
@@ -1738,8 +1803,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		reg_val += offset;
 
-		rc = __hike_mmu(&hike_ctx, (__u64 *)&store, &reg_val, ldsize,
-				HIKE_MEMORY_ACCESS_WRITE);
+		rc = __hike_mmu_write(&hike_ctx, store, &reg_val, ldsize);
 		if (rc < 0)
 			return rc;
 
