@@ -20,7 +20,7 @@ struct ipv6_info {
 };
 
 static __always_inline
-int __hvxdp_handle_ipv6(struct hdr_cursor *cur, struct xdp_md *ctx)
+int __hvxdp_handle_ipv6(struct xdp_md *ctx, struct hdr_cursor *cur)
 {
 	struct ipv6_info *info;
 	struct in6_addr *key;
@@ -29,7 +29,7 @@ int __hvxdp_handle_ipv6(struct hdr_cursor *cur, struct xdp_md *ctx)
 	int nexthdr;
 	int rc;
 
-	nexthdr = parse_ip6hdr(cur, &ip6h);
+	nexthdr = parse_ip6hdr(ctx, cur, &ip6h);
 	if (!ip6h || nexthdr < 0)
 		goto pass;
 
@@ -70,9 +70,9 @@ int __hike_classifier(struct xdp_md *ctx)
 	__be16 eth_type;
 	__u16 proto;
 
-	cur_init(&cur, ctx);
+	cur_init(ctx, &cur);
 
-	eth_type = parse_ethhdr(&cur, &eth);
+	eth_type = parse_ethhdr(ctx, &cur, &eth);
 	if (!eth || eth_type < 0)
 		goto out;
 
@@ -82,7 +82,7 @@ int __hike_classifier(struct xdp_md *ctx)
 	proto = bpf_htons(eth_type);
 	switch (proto) {
 	case ETH_P_IPV6:
-		return __hvxdp_handle_ipv6(&cur, ctx);
+		return __hvxdp_handle_ipv6(ctx, &cur);
 	case ETH_P_IP:
 		/* fallthrough */
 	default:

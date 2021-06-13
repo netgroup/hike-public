@@ -2,10 +2,20 @@
 #ifndef _HDR_CURSOR_H
 #define _HDR_CURSOR_H
 
+#define __HDR_CURSOR_BARRIER	0
+
+#ifndef barrier
+#define barrier()	__asm__ __volatile__("": : :"memory")
+#endif
+
+#if __HDR_CURSOR_BARRIER == 1
+#define cur_barrier()	barrier()
+#else
+#define cur_barrier()
+#endif
+
 /* header cursor to keep track of current parsing position within the packet */
 struct hdr_cursor {
-	struct xdp_md *ctx;
-
 	int dataoff;
 	int mhoff;
 	int nhoff;
@@ -32,14 +42,15 @@ static __always_inline void cur_reset_transport_header(struct hdr_cursor *cur)
 	cur->thoff = cur->dataoff;
 }
 
-static __always_inline void *cur_head(struct hdr_cursor *cur)
+static __always_inline unsigned char *xdp_md_head(struct xdp_md *ctx)
 {
-	return (void *)((long)cur->ctx->data);
+	return (unsigned char *)((long)ctx->data);
 }
 
-static __always_inline void *cur_data(struct hdr_cursor *cur)
+static __always_inline unsigned char *
+cur_data(struct xdp_md *ctx, struct hdr_cursor *cur)
 {
-	return cur_head(cur) + cur->dataoff;
+	return xdp_md_head(ctx) + cur->dataoff;
 }
 
 static __always_inline int cur_set_data(struct hdr_cursor *cur, int off)
@@ -52,40 +63,32 @@ static __always_inline int cur_set_data(struct hdr_cursor *cur, int off)
 	return 0;
 }
 
-static __always_inline void *cur_tail(struct hdr_cursor *cur)
+static __always_inline unsigned char *xdp_md_tail(struct xdp_md *ctx)
 {
-	return (void *)((long)cur->ctx->data_end);
+	return (unsigned char *)((long)ctx->data_end);
 }
 
-static __always_inline void *cur_mac_header(struct hdr_cursor *cur)
+static __always_inline unsigned char *
+cur_mac_header(struct xdp_md *ctx, struct hdr_cursor *cur)
 {
-	return cur_head(cur) + cur->mhoff;
+	return xdp_md_head(ctx) + cur->mhoff;
 }
 
-static __always_inline void *cur_network_header(struct hdr_cursor *cur)
+static __always_inline unsigned char *
+cur_network_header(struct xdp_md *ctx, struct hdr_cursor *cur)
 {
-	return cur_head(cur) + cur->nhoff;
+	return xdp_md_head(ctx) + cur->nhoff;
 }
 
-static __always_inline void *cur_transport_header(struct hdr_cursor *cur)
+static __always_inline unsigned char *
+cur_transport_header(struct xdp_md *ctx, struct hdr_cursor *cur)
 {
-	return cur_head(cur) + cur->thoff;
+	return xdp_md_head(ctx) + cur->thoff;
 }
-
-static __always_inline int
-__cur_update(struct hdr_cursor *cur, struct xdp_md * ctx)
-{
-	cur->ctx = ctx;
-
-	return 0;
-}
-
-#define cur_touch	__cur_update
 
 static __always_inline void
-cur_init(struct hdr_cursor *cur, struct xdp_md * ctx)
+cur_init(struct xdp_md * ctx, struct hdr_cursor *cur)
 {
-	__cur_update(cur, ctx);
 	cur->dataoff = 0;
 	cur_reset_mac_header(cur);
 	cur_reset_network_header(cur);
@@ -95,35 +98,26 @@ cur_init(struct hdr_cursor *cur, struct xdp_md * ctx)
 static __always_inline int
 __check_proto_offsets(struct hdr_cursor *cur)
 {
+	int rc = -EINVAL;
+
 	if (cur->dataoff < 0 || cur->dataoff > PROTO_OFF_MAX)
-		goto error;
+		goto out;
 
 	if (cur->mhoff < 0 || cur->mhoff > PROTO_OFF_MAX)
-		goto error;
+		goto out;
 
 	if (cur->nhoff < 0 || cur->nhoff > PROTO_OFF_MAX)
-		goto error;
+		goto out;
 
 	if (cur->thoff < 0 || cur->thoff > PROTO_OFF_MAX)
-		goto error;
+		goto out;
 
-	return 0;
+	rc = 0;
 
-error:
-	return -EINVAL;
+out:
+	barrier();
 
-}
-
-static __always_inline int
-cur_update_pointers(struct hdr_cursor *cur, struct xdp_md * ctx)
-{
-	int rc;
-
-	rc =__cur_update(cur, ctx);
-	if (rc < 0)
-		return rc;
-
-	return __check_proto_offsets(cur);
+	return rc;
 }
 
 static __always_inline int
@@ -134,24 +128,13 @@ cur_adjust_proto_offsets(struct hdr_cursor *cur, int off)
 	cur->nhoff += off;
 	cur->thoff += off;
 
+	barrier();
+
 	return __check_proto_offsets(cur);
 }
 
-static __always_inline int
-cur_update_pointers_after_head_expand(struct hdr_cursor *cur,
-				      struct xdp_md * ctx, int head_off)
-{
-	int rc;
-
-	rc = __cur_update(cur, ctx);
-	if (rc < 0)
-		return rc;
-
-	return cur_adjust_proto_offsets(cur, head_off);
-}
-
 #define		__may_pull(__ptr, __len, __data_end)			\
-			(((void *)(__ptr)) + (__len) <= (__data_end))
+			(((unsigned char *)(__ptr)) + (__len) <= (__data_end))
 
 #define 	__may_pull_hdr(__hdr, __data_end)			\
 			((__hdr) + 1 <= (__data_end))
@@ -159,40 +142,53 @@ cur_update_pointers_after_head_expand(struct hdr_cursor *cur,
 #define 	__pull(__cur, __len)					\
 			((__cur)->dataoff += (__len))
 
-static __always_inline int cur_may_pull(struct hdr_cursor *cur, int len)
+static __always_inline int
+cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 {
-	void *tail;
-	void *data;
+	unsigned char *data, *tail;
+	int rc = 0;
 
 	if (cur->dataoff < 0 || cur->dataoff > PROTO_OFF_MAX)
-		return 0;
+		goto out;
 
 	cur->dataoff &= PROTO_OFF_MAX;
-	data = cur_data(cur);
-	tail = cur_tail(cur);
 
-	return __may_pull(data, len, tail);
+	data = cur_data(ctx, cur);
+	tail = xdp_md_tail(ctx);
+
+	rc = __may_pull(data, len, tail);
+
+out:
+	return rc;
 }
 
-static __always_inline void *cur_pull(struct hdr_cursor *cur, int len)
+static __always_inline unsigned char *
+cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 {
-	if (!cur_may_pull(cur, len))
-		return NULL;
+	unsigned char *ptr = NULL;
+
+	if (!cur_may_pull(ctx, cur, len))
+		goto out;
 
 	__pull(cur, len);
+	ptr = cur_data(ctx, cur);
 
-	return cur_data(cur);
+out:
+	barrier();
+
+	return ptr;
 }
 
-static __always_inline void *
-cur_header_pointer(struct hdr_cursor *cur, int off, int len)
+static __always_inline unsigned char *
+cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur, int off, int len)
 {
-	void *head = cur_head(cur);
-	void *tail = cur_tail(cur);
+	unsigned char *head = xdp_md_head(ctx);
+	unsigned char *tail = xdp_md_tail(ctx);
+	unsigned char *ptr = NULL;
 	int __off = off + len;
 
 	if (__off < 0 || __off > PROTO_OFF_MAX)
-		goto error;
+		goto out;
 
 	/* to make the verifier happy... */
 	len &= PROTO_OFF_MAX;
@@ -200,33 +196,39 @@ cur_header_pointer(struct hdr_cursor *cur, int off, int len)
 
 	/* overflow for the packet */
 	if (!__may_pull(head + off, len, tail))
-		goto error;
+		goto out;
 
-	return head + off;
+	ptr = head + off;
 
-error:
-	return NULL;
+out:
+	barrier();
+
+	return ptr;
 }
 
-static __always_inline void *cur_push(struct hdr_cursor *cur, int len)
+static __always_inline unsigned char *
+cur_push(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 {
+	unsigned char *ptr = NULL;
 	int off;
 
 	if (len < 0)
-		goto error;
+		goto out;
 
-	off = (cur->dataoff - len);
+	off = cur->dataoff - len;
 	if (off < 0)
-		goto error;
+		goto out;
 
 	cur->dataoff = off & PROTO_OFF_MAX;
-	if (!cur_may_pull(cur, len))
-		goto error;
+	if (!cur_may_pull(ctx, cur, len))
+		goto out;
 
-	return cur_data(cur);
+	ptr = cur_data(ctx, cur);
 
-error:
-	return NULL;
+out:
+	barrier();
+
+	return ptr;
 }
 
 #endif
