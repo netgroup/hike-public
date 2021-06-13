@@ -6,9 +6,19 @@
 /* ########## Those definitions should be imported in some way ... ######### */
 /* ######################################################################### */
 
+/* eBPF/HIKe Program IDs */
+
 #define HIKE_EBPF_PROG_ALLOW_ANY	11
 #define HIKE_EBPF_PROG_DROP_ANY		12
 #define HIKE_EBPF_PROG_COUNT_PACKET	13
+
+enum {
+	HIKE_PCPU_MON_EVENT_DROP	= 0,
+	HIKE_PCPU_MON_EVENT_ALLOW	= 1,
+};
+#define HIKE_EBPF_PROG_PCPU_MON		14
+
+/* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
 #define HIKE_CHAIN_FOO_ID		76 /* 0x4c */
 #define HIKE_CHAIN_BAR_ID		77 /* 0x4d */

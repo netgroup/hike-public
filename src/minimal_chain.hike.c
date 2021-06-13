@@ -101,9 +101,18 @@ out:
 	return 0;
 }
 
+#define PCPU_MON_INC_ALLOW()					\
+	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_ALLOW, true)
+
+#define PCPU_MON_INC_DROP()					\
+	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_DROP, true)
+
 HIKE_CHAIN_1(HIKE_CHAIN_BAZ_ID)
 {
 #define __ETH_PROTO_TYPE_ABS_OFF	12
+#define IPV6_ICMP_PROTO			58
 	struct ipv6_info {
 		int nexthdr;
 		__u8 __pad[4];
@@ -114,15 +123,20 @@ HIKE_CHAIN_1(HIKE_CHAIN_BAZ_ID)
 	hike_packet_read_u16(&eth_type, __ETH_PROTO_TYPE_ABS_OFF);
 
 	nexthdr = info->nexthdr;
-	if (nexthdr == 58) {
+	if (nexthdr == IPV6_ICMP_PROTO) {
+		PCPU_MON_INC_DROP();
 		/* drop only ICMP messages */
 		hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, eth_type);
-		goto out;
+		goto fallback;
 	}
 
+	PCPU_MON_INC_ALLOW();
 	hike_elem_call_2(HIKE_EBPF_PROG_ALLOW_ANY, eth_type);
-
-out:
+fallback:
+	/* for the moment, we return 0; however in a fallback path we should
+	 * notify the event to the HIKe VM using a suitable error code.
+	 */
 	return 0;
+#undef IPV6_ICMP_PROTO
 #undef __ETH_PROTO_TYPE_ABS_OFF
 }
