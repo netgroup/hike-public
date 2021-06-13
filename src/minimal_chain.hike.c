@@ -104,12 +104,25 @@ out:
 HIKE_CHAIN_1(HIKE_CHAIN_BAZ_ID)
 {
 #define __ETH_PROTO_TYPE_ABS_OFF	12
+	struct ipv6_info {
+		int nexthdr;
+		__u8 __pad[4];
+	}  *info = UAPI_PCPU_SHMEM_ADDR;
 	__u16 eth_type;
+	int nexthdr;
 
 	hike_packet_read_u16(&eth_type, __ETH_PROTO_TYPE_ABS_OFF);
 
-	hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, eth_type);
+	nexthdr = info->nexthdr;
+	if (nexthdr == 58) {
+		/* drop only ICMP messages */
+		hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, eth_type);
+		goto out;
+	}
 
+	hike_elem_call_2(HIKE_EBPF_PROG_ALLOW_ANY, eth_type);
+
+out:
 	return 0;
 #undef __ETH_PROTO_TYPE_ABS_OFF
 }

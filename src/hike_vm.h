@@ -690,7 +690,9 @@ struct vaddr_info {
 #define HIKE_MEM_BID_ZERO		0x00 /* reserved */
 #define HIKE_MEM_BID_PACKET		0x01
 #define HIKE_MEM_BID_PRIVATE		0x02
-#define HIKE_MEM_BID_SHARED		0x03
+#define HIKE_MEM_BID_PCPU_SHARED	0x03 /* shared between HIKe Chains and
+					      * eBPF/HIKe programs.
+					      */
 #define HIKE_MEM_BID_STACK		0x04 /* per chain reserved stack */
 
 #define HIKE_MEM_BANK_PACKET_DATA_SIZE	0x3fff /* off in packet 16KB */
@@ -701,6 +703,10 @@ struct hike_mem_packet_layout {
 
 #define HIKE_MEM_BANK_STACK_DATA_SIZE	(HIKE_CHAIN_REGMEM_STACK_SIZE)
 struct hike_chain_stack_layout {
+	__u8 data[0];
+};
+
+struct hike_pcpu_shared_mem_layout {
 	__u8 data[0];
 };
 
@@ -769,6 +775,14 @@ struct hike_chain_stack_layout {
 				  data,	HIKE_MEM_BANK_STACK_DATA_SIZE)	\
 	)
 
+/* hike per-cpu shared memory */
+#define HIKE_MEM_PCPU_SHARED_ADDR					\
+	HIKE_MEM_RAW_ADDR(						\
+	   HIKE_MEM_BANK_RAW(HIKE_MEM_BID_PCPU_SHARED,			\
+				  struct hike_pcpu_shared_mem_layout, 	\
+				  data)					\
+	)
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 #define HIKE_HPFUNC_SHIFT				8
@@ -807,6 +821,16 @@ bpf_map(pcpu_hike_chain_data_map, PERCPU_ARRAY,
 
 bpf_map(hike_chain_map, HASH,
 	__u32, struct hike_chain, HIKE_CHAIN_MAP_NELEM_MAX);
+
+#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	64
+struct hike_shared_mem_data {
+	__u8 data[HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE];
+};
+
+/* HIKe per-cpu Shared Map */
+#define HIKE_SHARED_MAP_NELEM_MAX	1
+bpf_map(hike_pcpu_shmem_map, PERCPU_ARRAY,
+	__u32, struct hike_shared_mem_data, HIKE_SHARED_MAP_NELEM_MAX);
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
@@ -1492,6 +1516,55 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 				  HIKE_CHAIN_REGMEM_STACK_SIZE);
 }
 
+/* private */
+static __always_inline struct hike_shared_mem_data*
+__get_hike_pcpu_shared_memory(void)
+
+{
+	const __u32 off = 0;
+
+	return bpf_map_lookup_elem(&hike_pcpu_shmem_map, &off);
+}
+
+static __always_inline void *hike_pcpu_shmem(void)
+{
+	return __get_hike_pcpu_shared_memory();
+}
+
+static __always_inline int
+__hike_pcpu_shared_memory_read(__u64 *ref, const struct vaddr_info *vinfo,
+			       int size)
+{
+	struct hike_shared_mem_data *shmem;
+	void *ptr;
+
+	shmem = __get_hike_pcpu_shared_memory();
+	if (!shmem)
+		return -ENOMEM;
+
+	ptr = (void *)&shmem->data[0];
+
+	return __hike_memory_load(size, ref, ptr, vinfo->off,
+				  HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE);
+}
+
+static __always_inline int
+__hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
+			       int size)
+{
+	struct hike_shared_mem_data *shmem;
+	void *ptr;
+
+	shmem = __get_hike_pcpu_shared_memory();
+	if (!shmem)
+		return -ENOMEM;
+
+	ptr = (void *)&shmem->data[0];
+
+	return __hike_memory_store(size, val, ptr, vinfo->off,
+				   HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE);
+}
+
 #define __hike_mmu_read(CTX, REF, VADDR, LDSIZE) 			\
 ({									\
 	int __rc = -EBADF;						\
@@ -1515,9 +1588,12 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 					(CTX)->chain_data, (REF),	\
 					__vinfo, __size);		\
 			break;	/* exit from the switch case */		\
+		case HIKE_MEM_BID_PCPU_SHARED:				\
+			__rc = __hike_pcpu_shared_memory_read(		\
+					(REF), __vinfo, __size);	\
+			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_ZERO:					\
 		case HIKE_MEM_BID_PRIVATE:				\
-		case HIKE_MEM_BID_SHARED:				\
 		default:						\
 			__rc = -ENOMEM;					\
 			break;	/* exit from the switch case */		\
@@ -1550,9 +1626,11 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 					(CTX)->chain_data, (REF),	\
 					__vinfo, __size);		\
 			break;	/* exit from the switch case */		\
+		case HIKE_MEM_BID_PCPU_SHARED:				\
+			__rc = __hike_pcpu_shared_memory_write(		\
+					(REF), __vinfo, __size);	\
 		case HIKE_MEM_BID_ZERO:					\
 		case HIKE_MEM_BID_PRIVATE:				\
-		case HIKE_MEM_BID_SHARED:				\
 		default:						\
 			__rc = -ENOMEM;					\
 			break;	/* exit from the switch case */		\
@@ -2160,6 +2238,8 @@ __EXPORT_HIKE_PROG_MAP_NAME(progname, mapname) = { 			\
 /* ############################## User API ################################# */
 /* ######################################################################### */
 
+
+#define UAPI_PCPU_SHMEM_ADDR ((void *)((size_t)HIKE_MEM_PCPU_SHARED_ADDR))
 
 #define __UAPI_PACKET_BASE_ADDR ((size_t)(HIKE_MEM_PACKET_ADDR_DATA))
 

@@ -9,94 +9,20 @@
 
 #define HIKE_DEBUG 1
 #include "hike_vm.h"
-#include "hdr_cursor.h"
-
-/*
- *	struct vlan_hdr - vlan header
- *	@h_vlan_TCI: priority and VLAN ID
- *	@h_vlan_encapsulated_proto: packet type ID or len
- */
-struct vlan_hdr {
-	__be16	h_vlan_TCI;
-	__be16	h_vlan_encapsulated_proto;
-};
-
-/* Allow users of header file to redefine VLAN max depth */
-#ifndef VLAN_MAX_DEPTH
-#define VLAN_MAX_DEPTH 4
-#endif
-
-static __always_inline int proto_is_vlan(__u16 h_proto)
-{
-	return !!(h_proto == bpf_htons(ETH_P_8021Q) ||
-		  h_proto == bpf_htons(ETH_P_8021AD));
-}
-
-static __always_inline int parse_ethhdr(struct hdr_cursor *cur,
-					struct ethhdr **ethhdr)
-{
-	struct ethhdr *eth = cur_data(cur);
-	struct vlan_hdr *vlh;
-	__u16 h_proto;
-	int i;
-
-	/* Byte-count bounds check; check if current pointer + size of header
-	 * is after data_end.
-	 */
-	if (!cur_may_pull(cur, sizeof(*eth)))
-		return -ENOBUFS;
-
-	if (ethhdr)
-		*ethhdr = eth;
-
-	vlh = cur_pull(cur, sizeof(*eth));
-	h_proto = eth->h_proto;
-
-	/* Use loop unrolling to avoid the verifier restriction on loops;
-	 * support up to VLAN_MAX_DEPTH layers of VLAN encapsulation.
-	 */
-#pragma unroll
-	for (i = 0; i < VLAN_MAX_DEPTH; i++) {
-		if (!proto_is_vlan(h_proto))
-			break;
-
-		if (!cur_may_pull(cur, sizeof(*vlh)))
-			break;
-
-		h_proto = vlh->h_vlan_encapsulated_proto;
-		cur_pull(cur, sizeof(*vlh));
-	}
-
-	return h_proto; /* network-byte-order */
-}
-
-static __always_inline int parse_ip6hdr(struct hdr_cursor *cur,
-					struct ipv6hdr **ip6hdr)
-{
-	struct ipv6hdr *ip6h = cur_data(cur);
-
-	/* Pointer-arithmetic bounds check; pointer +1 points to after end of
-	 * thing being pointed to. We will be using this style in the remainder
-	 * of the tutorial.
-	 */
-	if (!cur_may_pull(cur, sizeof(*ip6h)))
-		return -ENOBUFS;
-
-	if (ip6hdr)
-		*ip6hdr = ip6h;
-
-	cur_pull(cur, sizeof(*ip6h));
-
-	return ip6h->nexthdr;
-}
-
+#include "parse_helpers.h"
 
 #define MAP_IPV6_SIZE	64
 bpf_map(map_ipv6, HASH, struct in6_addr, __u32, MAP_IPV6_SIZE);
 
+struct ipv6_info {
+	int nexthdr;
+	__u8 __pad[4];
+};
+
 static __always_inline
 int __hvxdp_handle_ipv6(struct hdr_cursor *cur, struct xdp_md *ctx)
 {
+	struct ipv6_info *info;
 	struct in6_addr *key;
 	struct ipv6hdr *ip6h;
 	__u32 *chain_id;
@@ -115,6 +41,15 @@ int __hvxdp_handle_ipv6(struct hdr_cursor *cur, struct xdp_md *ctx)
 	if (!chain_id)
 		/* value not found, deliver the packet to the kernel */
 		goto pass;
+
+	/* save the nexthdr into the shared hike_pcpu_shmem data chunk */
+	info = hike_pcpu_shmem();
+	if (!info)
+		/* TODO: this should be considered an error */
+		goto pass;
+
+	/* this value will be available to HIKe Chains :-o */
+	info->nexthdr = nexthdr;
 
 	DEBUG_PRINT("HIKe VM invoking Chain ID=0x%x", *chain_id);
 
