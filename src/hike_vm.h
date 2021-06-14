@@ -1565,7 +1565,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 				   HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE);
 }
 
-#define __hike_mmu_read(CTX, REF, VADDR, LDSIZE) 			\
+#define __hike_mmu_read(CTX, CHAIN_DATA, REF, VADDR, LDSIZE) 		\
 ({									\
 	int __rc = -EBADF;						\
 	do {								\
@@ -1580,12 +1580,12 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 		switch (__vinfo->bank_id) {				\
 		case HIKE_MEM_BID_PACKET: 				\
 			__rc = __hike_memory_xdp_packet_read(		\
-					(CTX)->ctx, (REF), __vinfo,	\
+					(CTX), (REF), __vinfo,	\
 					__size);			\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_STACK:				\
 			__rc = __hike_memory_chain_stack_read(		\
-					(CTX)->chain_data, (REF),	\
+					(CHAIN_DATA), (REF),		\
 					__vinfo, __size);		\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_PCPU_SHARED:				\
@@ -1603,7 +1603,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 	__rc;								\
 })
 
-#define __hike_mmu_write(CTX, REF, VADDR, LDSIZE) 			\
+#define __hike_mmu_write(CTX, CHAIN_DATA, REF, VADDR, LDSIZE) 		\
 ({									\
 	int __rc = -EBADF;						\
 	do {								\
@@ -1618,12 +1618,12 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 		switch (__vinfo->bank_id) {				\
 		case HIKE_MEM_BID_PACKET: 				\
 			__rc = __hike_memory_xdp_packet_write(		\
-					(CTX)->ctx, (REF), __vinfo,	\
+					(CTX), (REF), __vinfo,		\
 					__size);			\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_STACK:				\
 			__rc = __hike_memory_chain_stack_write(		\
-					(CTX)->chain_data, (REF),	\
+					(CHAIN_DATA), (REF),		\
 					__vinfo, __size);		\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_PCPU_SHARED:				\
@@ -1714,12 +1714,8 @@ static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
-	struct hike_memory_access_ctx hike_ctx = {
-		.chain_data = chain_data,
-		.ctx = ctx,
-	};
 	struct hike_chain *cur_chain;
-	const struct hike_insn *insn;
+	struct hike_insn *insn;
 	__u64 *reg_ref;
 	__u64 reg_val;
 	__u8 jmp_cond;
@@ -1841,7 +1837,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		 */
 		reg_val += offset;
 
-		rc = __hike_mmu_read(&hike_ctx, reg_ref, &reg_val, ldsize);
+		rc = __hike_mmu_read(ctx, chain_data, reg_ref, &reg_val, ldsize);
 		if (rc < 0)
 			return rc;
 
@@ -1881,7 +1877,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		reg_val += offset;
 
-		rc = __hike_mmu_write(&hike_ctx, store, &reg_val, ldsize);
+		rc = __hike_mmu_write(ctx, chain_data, store, reg_val, ldsize);
 		if (rc < 0)
 			return rc;
 
