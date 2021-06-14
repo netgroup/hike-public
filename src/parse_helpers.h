@@ -17,6 +17,43 @@
 
 #include "hdr_cursor.h"
 
+struct pkt_info {
+	struct hdr_cursor cur;
+};
+
+static __always_inline struct hdr_cursor *pkt_info_cur(struct pkt_info *info)
+{
+	return &info->cur;
+}
+
+static __always_inline __u8 ipv6_get_dsfield(const struct ipv6hdr *ip6h)
+{
+	return bpf_ntohs(*(const __be16 *)ip6h) >> 4;
+}
+
+static __always_inline
+void ipv6_set_dsfield(struct ipv6hdr *const ip6h, __u8 mask, __u8 value)
+{
+	__be16 *p = (__be16 *)ip6h;
+
+	/* A bit of explaination here, first 32 bits of an IPv6 packet:
+	 * --------------------------------------------------------------------
+	 * | Version (4 bits) | Traffic Class (8 bits) | Flow Label (20 bits) |
+	 * --------------------------------------------------------------------
+	 *
+	 * we need to write in the Traffic Class, so we have to shift (left)
+	 * both mask and value of 4 bits. Then, we need to keep the 4 bits of
+	 * version field and the first 4 bits of the Flow Label field. So, here
+	 * we have the mask 0xf00f.
+	 * At this point it is just a matter of doing the bit-bit AND between
+	 * the previous value of *p (the overall first 16 bits of the packet)
+	 * with the adjusted mask value. Therefore, we proceed to consider the
+	 * dscp value (doing the bit-bit OR).
+	 */
+	*p = (*p & bpf_htons((((__u16)mask << 4) | 0xf00f))) |
+	      bpf_htons((__u16)value << 4);
+}
+
 /*
  *	struct vlan_hdr - vlan header
  *	@h_vlan_TCI: priority and VLAN ID

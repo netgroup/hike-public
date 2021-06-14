@@ -8,7 +8,7 @@
 #define barrier()	__asm__ __volatile__("": : :"memory")
 #endif
 
-#if __HDR_CURSOR_BARRIER == 1
+#if __HDR_CURSOR_BARRIER == 0
 #define cur_barrier()	barrier()
 #else
 #define cur_barrier()
@@ -24,8 +24,10 @@ struct hdr_cursor {
 
 /* the maximum offset at which a generic protocol is considered to be valid
  * from the beginning (head) of the hdr_cursor.
+ *
+ * XXX: SUPPORTED UP TO 16K OFFSET
  */
-#define PROTO_OFF_MAX 0xffff
+#define PROTO_OFF_MAX 0x3fff
 
 static __always_inline void cur_reset_mac_header(struct hdr_cursor *cur)
 {
@@ -47,25 +49,15 @@ static __always_inline unsigned char *xdp_md_head(struct xdp_md *ctx)
 	return (unsigned char *)((long)ctx->data);
 }
 
+static __always_inline unsigned char *xdp_md_tail(struct xdp_md *ctx)
+{
+	return (unsigned char *)((long)ctx->data_end);
+}
+
 static __always_inline unsigned char *
 cur_data(struct xdp_md *ctx, struct hdr_cursor *cur)
 {
 	return xdp_md_head(ctx) + cur->dataoff;
-}
-
-static __always_inline int cur_set_data(struct hdr_cursor *cur, int off)
-{
-	if (off < 0 || off > PROTO_OFF_MAX)
-		return -EINVAL;
-
-	cur->dataoff = off & PROTO_OFF_MAX;
-
-	return 0;
-}
-
-static __always_inline unsigned char *xdp_md_tail(struct xdp_md *ctx)
-{
-	return (unsigned char *)((long)ctx->data_end);
 }
 
 static __always_inline unsigned char *
@@ -87,7 +79,7 @@ cur_transport_header(struct xdp_md *ctx, struct hdr_cursor *cur)
 }
 
 static __always_inline void
-cur_init(struct xdp_md * ctx, struct hdr_cursor *cur)
+cur_init(struct hdr_cursor *cur)
 {
 	cur->dataoff = 0;
 	cur_reset_mac_header(cur);
@@ -98,26 +90,19 @@ cur_init(struct xdp_md * ctx, struct hdr_cursor *cur)
 static __always_inline int
 __check_proto_offsets(struct hdr_cursor *cur)
 {
-	int rc = -EINVAL;
-
 	if (cur->dataoff < 0 || cur->dataoff > PROTO_OFF_MAX)
-		goto out;
+		return -EINVAL;
 
 	if (cur->mhoff < 0 || cur->mhoff > PROTO_OFF_MAX)
-		goto out;
+		return -EINVAL;
 
 	if (cur->nhoff < 0 || cur->nhoff > PROTO_OFF_MAX)
-		goto out;
+		return -EINVAL;
 
 	if (cur->thoff < 0 || cur->thoff > PROTO_OFF_MAX)
-		goto out;
+		return -EINVAL;
 
-	rc = 0;
-
-out:
-	barrier();
-
-	return rc;
+	return 0;
 }
 
 static __always_inline int
@@ -127,8 +112,6 @@ cur_adjust_proto_offsets(struct hdr_cursor *cur, int off)
 	cur->mhoff += off;
 	cur->nhoff += off;
 	cur->thoff += off;
-
-	barrier();
 
 	return __check_proto_offsets(cur);
 }
@@ -146,37 +129,23 @@ static __always_inline int
 cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 {
 	unsigned char *data, *tail;
-	int rc = 0;
-
-	if (cur->dataoff < 0 || cur->dataoff > PROTO_OFF_MAX)
-		goto out;
 
 	cur->dataoff &= PROTO_OFF_MAX;
 
 	data = cur_data(ctx, cur);
 	tail = xdp_md_tail(ctx);
 
-	rc = __may_pull(data, len, tail);
-
-out:
-	return rc;
+	return __may_pull(data, len, tail);
 }
 
 static __always_inline unsigned char *
 cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 {
-	unsigned char *ptr = NULL;
-
 	if (!cur_may_pull(ctx, cur, len))
-		goto out;
+		return NULL;
 
 	__pull(cur, len);
-	ptr = cur_data(ctx, cur);
-
-out:
-	barrier();
-
-	return ptr;
+	return cur_data(ctx, cur);
 }
 
 static __always_inline unsigned char *
@@ -184,11 +153,10 @@ cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur, int off, int len)
 {
 	unsigned char *head = xdp_md_head(ctx);
 	unsigned char *tail = xdp_md_tail(ctx);
-	unsigned char *ptr = NULL;
 	int __off = off + len;
 
 	if (__off < 0 || __off > PROTO_OFF_MAX)
-		goto out;
+		return NULL;
 
 	/* to make the verifier happy... */
 	len &= PROTO_OFF_MAX;
@@ -196,39 +164,9 @@ cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur, int off, int len)
 
 	/* overflow for the packet */
 	if (!__may_pull(head + off, len, tail))
-		goto out;
+		return NULL;
 
-	ptr = head + off;
-
-out:
-	barrier();
-
-	return ptr;
-}
-
-static __always_inline unsigned char *
-cur_push(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
-{
-	unsigned char *ptr = NULL;
-	int off;
-
-	if (len < 0)
-		goto out;
-
-	off = cur->dataoff - len;
-	if (off < 0)
-		goto out;
-
-	cur->dataoff = off & PROTO_OFF_MAX;
-	if (!cur_may_pull(ctx, cur, len))
-		goto out;
-
-	ptr = cur_data(ctx, cur);
-
-out:
-	barrier();
-
-	return ptr;
+	return head + off;
 }
 
 #endif

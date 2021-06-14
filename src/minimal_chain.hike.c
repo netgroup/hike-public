@@ -11,6 +11,7 @@
 
 #define HIKE_DEBUG 1
 #include "hike_vm.h"
+#include "parse_helpers.h"
 
 /* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
 #include "minimal.h"
@@ -101,6 +102,8 @@ out:
 	return 0;
 }
 
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
 #define PCPU_MON_INC_ALLOW()					\
 	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
 			 HIKE_PCPU_MON_EVENT_ALLOW, true)
@@ -109,27 +112,39 @@ out:
 	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
 			 HIKE_PCPU_MON_EVENT_DROP, true)
 
+
+#define IPV6_ICMP_PROTO			58
+
 HIKE_CHAIN_1(HIKE_CHAIN_BAZ_ID)
 {
-#define __ETH_PROTO_TYPE_ABS_OFF	12
-#define IPV6_ICMP_PROTO			58
-	struct ipv6_info {
-		int nexthdr;
-		__u8 __pad[4];
-	}  *info = UAPI_PCPU_SHMEM_ADDR;
+	struct pkt_info *info = UAPI_PCPU_SHMEM_ADDR;
+	struct hdr_cursor *cur = pkt_info_cur(info);
+	__u16 nexthdr_off;
 	__u16 eth_type;
-	int nexthdr;
+	__u8 nexthdr;
+	__u8 tos;
 
-	hike_packet_read_u16(&eth_type, __ETH_PROTO_TYPE_ABS_OFF);
+	hike_packet_read_u16(&eth_type, offsetof(struct ethhdr, h_proto));
 
-	nexthdr = info->nexthdr;
-	if (nexthdr == IPV6_ICMP_PROTO) {
+	/* TODO: handle the tos wich can be an error code... */
+	tos = hike_elem_call_1(HIKE_EBPF_PROG_IPV6_TOS_CLS);
+	if (tos == 0x04)
+		goto allow;
+
+	/* evaluate dinamically the offset of the nexthdr field in the IPv6
+	 * header.
+	 * Then, we load the nexthdr value accessing directly the packet.
+	 */
+	nexthdr_off = cur->nhoff + offsetof(struct ipv6hdr, nexthdr);
+	hike_packet_read_u8(&nexthdr, nexthdr_off);
+	if (nexthdr == IPV6_ICMP_PROTO) {	
 		PCPU_MON_INC_DROP();
 		/* drop only ICMP messages */
 		hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, eth_type);
 		goto fallback;
 	}
 
+allow:
 	PCPU_MON_INC_ALLOW();
 	hike_elem_call_2(HIKE_EBPF_PROG_ALLOW_ANY, eth_type);
 fallback:
@@ -137,6 +152,4 @@ fallback:
 	 * notify the event to the HIKe VM using a suitable error code.
 	 */
 	return 0;
-#undef IPV6_ICMP_PROTO
-#undef __ETH_PROTO_TYPE_ABS_OFF
 }

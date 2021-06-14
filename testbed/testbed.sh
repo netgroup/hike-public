@@ -121,6 +121,10 @@ read -r -d '' sut_env <<-EOF
 	# already created and pinned by the classifier. Indeed, we specify
 	# the maps that have to be re-bound to programs contained in progs.o
 	#
+	# MAP RE-BIND IS VERY IMPORTANT, OTHERWISE PROGRAMS WILL HAVE COPY
+	# OF THE SAME MAP AND THEY WILL NOT BE ABLE TO COMMUNICATE WITH EACH
+	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
+	#
 	bpftool prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
 		map name gen_jmp_table					\
 			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
@@ -128,6 +132,8 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
 		map name pcpu_hike_chain_data_map			\
 			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
+		map name hike_pcpu_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
 		pinmaps /sys/fs/bpf/maps/net
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
@@ -164,6 +170,11 @@ read -r -d '' sut_env <<-EOF
 	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
 		key	hex 0e 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/net/hvxdp_pcpu_mon
+
+	# Register count packet eBPF/HIKe Program, please see description above ;-)
+	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+		key	hex 0f 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/net/hvxdp_ipv6_tos_cls
 
 	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
 	# First of all we build the HIKe Chain program loader using the

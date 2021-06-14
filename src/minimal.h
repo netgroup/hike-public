@@ -17,6 +17,8 @@ enum {
 	HIKE_PCPU_MON_EVENT_ALLOW	= 1,
 };
 #define HIKE_EBPF_PROG_PCPU_MON		14
+#define HIKE_EBPF_PROG_IPV6_TOS_CLS	15
+
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
