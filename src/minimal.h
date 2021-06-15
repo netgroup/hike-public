@@ -21,6 +21,11 @@ enum {
 #define HIKE_EBPF_PROG_PCPU_MON		14
 #define HIKE_EBPF_PROG_IPV6_TOS_CLS	15
 
+#define HIKE_EBPF_PROG_APP_CFG_INIT	16
+#define HIKE_EBPF_PROG_APP_CFG_LOAD	17
+#define HIKE_EBPF_PROG_APP_CFG_STORE	18
+
+
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
