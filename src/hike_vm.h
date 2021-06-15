@@ -822,9 +822,10 @@ bpf_map(pcpu_hike_chain_data_map, PERCPU_ARRAY,
 bpf_map(hike_chain_map, HASH,
 	__u32, struct hike_chain, HIKE_CHAIN_MAP_NELEM_MAX);
 
-#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	64
+#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	63
 struct hike_shared_mem_data {
 	__u8 data[HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE];
+	__u8 reserved;
 };
 
 /* HIKe per-cpu Shared Map */
@@ -916,11 +917,12 @@ static __always_inline struct hike_chain
 	if (unlikely(ac_index >= HIKE_CHAIN_STACK_DEPTH_MAX))
 		return NULL;
 
-	barrier();
-
-	active_chain = &chain_data->chains[ac_index];
+	active_chain = &chain_data->chains[ac_index &
+					   (HIKE_CHAIN_STACK_DEPTH_MAX - 1)];
 	if (unlikely(!active_chain))
 		return NULL;
+
+	barrier();
 
 	return active_chain;
 }
@@ -954,15 +956,17 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 static __always_inline int
 __hike_chain_upc_add(struct hike_chain *chain, __s16 off)
 {
-	__u16 *upc = &chain->upc;
+	__u16 upc = chain->upc + off;
+	__u16 ninsn = chain->ninsn;
 
-	*upc += off;
-	if (unlikely(*upc > chain->ninsn || *upc > HIKE_CHAIN_NINSN_MAX))
+	if (upc > HIKE_CHAIN_NINSN_MAX)
+		return -ENOBUFS;
+	if (upc > ninsn)
 		return -ENOBUFS;
 
-	barrier();
+	chain->upc = upc;
 
-	return (int)(*upc & 0xffff);
+	return 0;
 }
 
 static __always_inline int __hike_chain_upc_inc(struct hike_chain *chain)
@@ -1138,9 +1142,7 @@ hike_insn *__hike_chain_hike_insn_at(struct hike_chain *hc, __u16 upc)
 	if (unlikely(upc >= hc->ninsn || upc >= HIKE_CHAIN_NINSN_MAX))
 		return NULL;
 
-	barrier();
-
-	insn = &hc->insns[upc];
+	insn = &hc->insns[upc & (HIKE_CHAIN_NINSN_MAX - 1)];
 	if (!insn)
 		return NULL;
 
@@ -1176,71 +1178,6 @@ static __always_inline struct hike_chain_regmem *hike_chain_get_regmem()
 	return &cur_chain->regmem;
 }
 
-#if 0
-static __always_inline int hike_chain_get_reg_val(__s32 index, __u64 *const val)
-{
-	struct hike_chain_data *chain_data;
-	struct hike_chain *cur_chain;
-	int rc;
-
-	chain_data = get_hike_chain_data();
-	if (!chain_data)
-		return -ENOENT;
-
-	cur_chain = __hike_get_active_chain(chain_data);
-	if (!cur_chain)
-		return -ENOBUFS;
-
-	rc = __hike_chain_load_reg(cur_chain, index, val);
-	if (rc < 0)
-		return rc;
-
-	return 0;
-}
-
-int hike_chain_get_reg_ref(__s32 index, __u64 **reg)
-{
-	struct hike_chain_data *chain_data;
-	struct hike_chain *cur_chain;
-	int rc;
-
-	chain_data = get_hike_chain_data();
-	if (!chain_data)
-		return -ENOENT;
-
-	cur_chain = __hike_get_active_chain(chain_data);
-	if (!cur_chain)
-		return -ENOENT;
-
-	rc = __hike_chain_ref_reg(cur_chain, index, reg);
-	if (rc < 0)
-		return rc;
-
-	return 0;
-}
-
-int hike_chain_set_reg_val(__s32 index, const __u64 *val)
-{
-	struct hike_chain_data *chain_data;
-	struct hike_chain *cur_chain;
-	int rc;
-
-	chain_data = get_hike_chain_data();
-	if (!chain_data)
-		return -ENOENT;
-
-	cur_chain = __hike_get_active_chain(chain_data);
-	if (!cur_chain)
-		return -ENOENT;
-
-	rc = __hike_chain_store_reg(cur_chain, index, val);
-	if (rc < 0)
-		return rc;
-
-	return 0;
-}
-#endif
-
 static __always_inline int __hike_chain_exit(struct hike_chain_data *chain_data)
 {
 	__u16 active_chain = chain_data->active_chain;
@@ -1252,18 +1189,6 @@ static __always_inline int __hike_chain_exit(struct hike_chain_data *chain_data)
 
 	return __hike_pop_chain(chain_data);
 }
-
-enum hike_memory_access_mode {
-	HIKE_MEMORY_ACCESS_UNSPEC,
-	HIKE_MEMORY_ACCESS_READ,
-	HIKE_MEMORY_ACCESS_WRITE,
-};
-
-struct hike_memory_access_ctx {
-	struct hike_chain_data *chain_data;
-	/* specific contex for eBPF (i.e. xdp_md for XDP) */
-	void *ctx;
-};
 
 static __always_inline int __hike_mem_op_size(__u8 opsize)
 {
@@ -1516,35 +1441,41 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 				  HIKE_CHAIN_REGMEM_STACK_SIZE);
 }
 
-/* private */
-static __always_inline struct hike_shared_mem_data*
-__get_hike_pcpu_shared_memory(void)
+#define hike_pcpu_shmem() 					\
+({								\
+	const __u32 __off = 0;					\
+	bpf_map_lookup_elem(&hike_pcpu_shmem_map, &__off);	\
+})
 
+static __always_inline int hike_shared_mem_init(void)
 {
-	const __u32 off = 0;
+	struct hike_shared_mem_data *shmem;
 
-	return bpf_map_lookup_elem(&hike_pcpu_shmem_map, &off);
+	shmem = hike_pcpu_shmem();
+	if (!shmem)
+		return -ENOMEM;
+
+	/* writing on the shmem area before using it makes happy the
+	 * verifier... just another trick.
+	 */
+	shmem->reserved = 0;
+	return 0;
 }
 
-static __always_inline void *hike_pcpu_shmem(void)
-{
-	return __get_hike_pcpu_shared_memory();
-}
 
 static __always_inline int
 __hike_pcpu_shared_memory_read(__u64 *ref, const struct vaddr_info *vinfo,
 			       int size)
 {
 	struct hike_shared_mem_data *shmem;
-	void *ptr;
+	const __u32 off = 0;
 
-	shmem = __get_hike_pcpu_shared_memory();
+	shmem = bpf_map_lookup_elem(&hike_pcpu_shmem_map, &off);
 	if (!shmem)
 		return -ENOMEM;
 
-	ptr = (void *)&shmem->data[0];
-
-	return __hike_memory_load(size, ref, ptr, vinfo->off,
+	return __hike_memory_load(size, ref, (void *)&shmem->data[0],
+				  vinfo->off,
 				  HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE);
 }
 
@@ -1553,15 +1484,14 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 			       int size)
 {
 	struct hike_shared_mem_data *shmem;
-	void *ptr;
+	const __u32 off = 0;
 
-	shmem = __get_hike_pcpu_shared_memory();
+	shmem = bpf_map_lookup_elem(&hike_pcpu_shmem_map, &off);
 	if (!shmem)
 		return -ENOMEM;
 
-	ptr = (void *)&shmem->data[0];
-
-	return __hike_memory_store(size, val, ptr, vinfo->off,
+	return __hike_memory_store(size, val, (void *)&shmem->data[0],
+				   vinfo->off,
 				   HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE);
 }
 
@@ -1580,7 +1510,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 		switch (__vinfo->bank_id) {				\
 		case HIKE_MEM_BID_PACKET: 				\
 			__rc = __hike_memory_xdp_packet_read(		\
-					(CTX), (REF), __vinfo,	\
+					(CTX), (REF), __vinfo,		\
 					__size);			\
 			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_STACK:				\
@@ -1714,8 +1644,8 @@ static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
+	struct hike_insn __insn, *_insn, *insn;
 	struct hike_chain *cur_chain;
-	struct hike_insn *insn;
 	__u64 *reg_ref;
 	__u64 reg_val;
 	__u8 jmp_cond;
@@ -1731,9 +1661,16 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
-	insn = __hike_chain_cur_hike_insn(cur_chain);
-	if (unlikely(!insn))
+	_insn = __hike_chain_cur_hike_insn(cur_chain);
+	if (unlikely(!_insn))
 		return -EFAULT;
+
+	/* let's copy locally the _insn and then take back the reference to
+	 * the insn which is in this case stored on the stack. This is a trick
+	 * fo the optimizer...
+	 */
+	__insn = *_insn;
+	insn = &__insn;
 
 	opcode = insn->hic_code;
 
@@ -1877,7 +1814,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		reg_val += offset;
 
-		rc = __hike_mmu_write(ctx, chain_data, store, reg_val, ldsize);
+		rc = __hike_mmu_write(ctx, chain_data, store, &reg_val, ldsize);
 		if (rc < 0)
 			return rc;
 
@@ -2133,6 +2070,10 @@ hike_chain_boostrap(struct xdp_md *ctx, __s32 chain_id)
 	struct hike_chain *cur_chain;
 	struct hike_insn *insn;
 	int rc;
+
+	rc = hike_shared_mem_init();
+	if (rc  < 0)
+		return rc;
 
 	chain_data = get_hike_chain_data();
 	if (unlikely(!chain_data))
