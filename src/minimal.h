@@ -6,8 +6,10 @@
 /* ########## Those definitions should be imported in some way ... ######### */
 /* ######################################################################### */
 
-/* eBPF/HIKe Program IDs */
 
+#define HIKE_DEBUG			1
+
+/* eBPF/HIKe Program IDs */
 #define HIKE_EBPF_PROG_ALLOW_ANY	11
 #define HIKE_EBPF_PROG_DROP_ANY		12
 #define HIKE_EBPF_PROG_COUNT_PACKET	13
@@ -24,7 +26,6 @@ enum {
 
 #define HIKE_CHAIN_FOO_ID		76 /* 0x4c */
 #define HIKE_CHAIN_BAR_ID		77 /* 0x4d */
-
 #define HIKE_CHAIN_BAZ_ID		78 /* 0x4e */
 
 #endif
