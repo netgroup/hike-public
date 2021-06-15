@@ -7,7 +7,9 @@
 #include <linux/seg6.h>
 #include <linux/errno.h>
 
-#define HIKE_DEBUG 1
+/* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
+#include "minimal.h"
+
 #include "hike_vm.h"
 #include "parse_helpers.h"
 
@@ -64,8 +66,6 @@ int __hike_classifier(struct xdp_md *ctx)
 
 	cur = pkt_info_cur(info);
 	cur_init(cur);
-
-	memset(info, 0, HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE);
 
 	eth_type = parse_ethhdr(ctx, cur, &eth);
 	if (!eth || eth_type < 0)
