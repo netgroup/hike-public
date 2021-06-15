@@ -13,7 +13,10 @@ CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 # eBPF programs; add more eBPF programs here.
-EBPF_SRC ?= minimal_xdp.bpf.c minimal_classifier.bpf.c
+EBPF_SRC ?= minimal_xdp.bpf.c \
+	    minimal_classifier.bpf.c \
+	    monitor.bpf.c \
+	    ip6_tos_cls.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c

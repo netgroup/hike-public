@@ -136,6 +136,29 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
 		pinmaps /sys/fs/bpf/maps/net
 
+	bpftool prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
+		map name gen_jmp_table					\
+			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
+		map name hike_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
+		map name pcpu_hike_chain_data_map			\
+			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
+		map name hike_pcpu_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		pinmaps /sys/fs/bpf/maps/mon
+
+	bpftool prog loadall ip6_tos_cls.o /sys/fs/bpf/progs/ip6tos type xdp \
+		map name gen_jmp_table					\
+			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
+		map name hike_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
+		map name pcpu_hike_chain_data_map			\
+			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
+		map name hike_pcpu_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		pinmaps /sys/fs/bpf/maps/ip6tos
+
+
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/init/hike_classifier dev enp6s0f0
@@ -163,18 +186,13 @@ read -r -d '' sut_env <<-EOF
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
 	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0d 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_count_packet
-
-	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
 		key	hex 0e 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_pcpu_mon
+		value	pinned /sys/fs/bpf/progs/mon/hvxdp_pcpu_mon
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
 	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
 		key	hex 0f 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_ipv6_tos_cls
+		value	pinned /sys/fs/bpf/progs/ip6tos/hvxdp_ipv6_tos_cls
 
 	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
 	# First of all we build the HIKe Chain program loader using the
