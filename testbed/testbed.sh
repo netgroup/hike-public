@@ -42,6 +42,7 @@ ip -netns tg link set dev enp6s0f1 up
 
 ip -netns tg addr add 12:1::1/64 dev enp6s0f0
 ip -netns tg addr add fc01::1/64 dev enp6s0f0
+ip -netns tg addr add fc02::1/64 dev enp6s0f0
 ip -netns tg addr add 10.12.1.1/24 dev enp6s0f0
 
 ip -netns tg addr add 12:2::1/64 dev enp6s0f1
@@ -80,6 +81,7 @@ ip -netns sut link set dev enp6s0f1 up
 
 ip -netns sut addr add 12:1::2/64 dev enp6s0f0
 ip -netns sut addr add fc01::2/64 dev enp6s0f0
+ip -netns sut addr add fc02::2/64 dev enp6s0f0
 ip -netns sut addr add 10.12.1.2/24 dev enp6s0f0
 
 ip -netns sut addr add 12:2::2/64 dev enp6s0f1
@@ -256,6 +258,10 @@ read -r -d '' sut_env <<-EOF
 
 	# Load the classifier map config for IPv6 addresses
 	/bin/bash data/classifier_config.load.sh
+
+	# Load the app_config.load.sh for setting the configs used by the
+	# HIKE Programs (apps) and Chains.
+	/bin/bash data/app_config.load.sh
 
 	/bin/bash
 EOF

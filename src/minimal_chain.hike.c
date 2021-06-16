@@ -153,3 +153,103 @@ fallback:
 	 */
 	return 0;
 }
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+#define allow(ETH_TYPE) \
+	hike_elem_call_2(HIKE_EBPF_PROG_ALLOW_ANY, (ETH_TYPE))
+
+#define drop(ETH_TYPE) \
+	hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, (ETH_TYPE))
+
+#define PCPU_MON_INC_ERROR()					\
+	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_ERROR, true)
+
+#define ipv6_tos_cls() \
+	hike_elem_call_1(HIKE_EBPF_PROG_IPV6_TOS_CLS)
+
+#define app_cfg_load(KEY) \
+	hike_elem_call_2(HIKE_EBPF_PROG_APP_CFG_LOAD, (KEY))
+
+HIKE_CHAIN_1(HIKE_CHAIN_MON_ALLOW)
+{
+	struct pkt_info *info = UAPI_PCPU_SHMEM_ADDR;
+	struct hdr_cursor *cur = pkt_info_cur(info);
+	__u16 eth_type_off;
+	__u16 eth_type;
+
+	eth_type_off = cur->mhoff + offsetof(struct ethhdr, h_proto);
+	hike_packet_read_u16(&eth_type, eth_type_off);
+
+	PCPU_MON_INC_ALLOW();
+
+	allow(eth_type);
+
+	/* fallback */
+	return 0;
+}
+#define mon_and_allow() \
+	hike_elem_call_1(HIKE_CHAIN_MON_ALLOW)
+
+HIKE_CHAIN_1(HIKE_CHAIN_MON_DROP)
+{
+	struct pkt_info *info = UAPI_PCPU_SHMEM_ADDR;
+	struct hdr_cursor *cur = pkt_info_cur(info);
+	__u16 eth_type_off;
+	__u16 eth_type;
+
+	eth_type_off = cur->mhoff + offsetof(struct ethhdr, h_proto);
+	hike_packet_read_u16(&eth_type, eth_type_off);
+
+	PCPU_MON_INC_DROP();
+
+	drop(eth_type);
+
+	/* fallback */
+	return 0;
+}
+#define mon_and_drop() \
+	hike_elem_call_1(HIKE_CHAIN_MON_DROP)
+
+HIKE_CHAIN_1(HIKE_CHAIN_QUX_ID)
+{
+	/* app_cfg_load returns a signed 64-bit value in case of error.
+	 * However, NETSTATE key returns a value which is [0, U16_MAX/2 - 1] in
+	 * case of success. Therefore, in case of error the msb of the u16 will
+	 * be set to 1.
+	 *
+	 * XXX NB: that's an hack only for testing purposes... check on __s64
+	 * should be done in any case.
+	 */
+	__s16 val = app_cfg_load(HIKE_APP_CFG_KEY_NETSTATE);
+	__u8 state;
+	__u8 tos;
+
+	if (val < 0) {
+		/* error while retrieving the stte info; drop the packet */
+		PCPU_MON_INC_ERROR();
+		goto drop;
+	}
+
+	/* evaluate ipv6 tos */
+	tos = ipv6_tos_cls();
+
+	/* for the sake of semplicity, we consider the state as 8-bit */
+	state = val & 0xff;
+	switch (state) {
+	case HIKE_APP_CFG_VAL_NESTATE_CRIT:
+		if (tos != HIKE_IPV6_TOS_CONTROL_TRAFFIC)
+			goto drop;
+
+		break;
+	}
+
+	mon_and_allow();
+
+	goto fallback;
+drop:
+	mon_and_drop();
+fallback:
+	return 0;
+}
