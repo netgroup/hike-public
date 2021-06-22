@@ -41,6 +41,7 @@ enum {
 	HIKE_APP_CFG_VAL_NESTATE_CRIT	 = 1,
 };
 
+#define HIKE_EBPF_PROG_DUMMY_TLCL	19
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
@@ -51,5 +52,13 @@ enum {
 #define HIKE_CHAIN_QUX_ID		79 /* 0x4f */
 #define HIKE_CHAIN_MON_ALLOW		80 /* 0x50 */
 #define HIKE_CHAIN_MON_DROP		81 /* 0x51 */
+
+#define HIKE_CHAIN_DUMMY_TLCL_ID	82 /* 0x52 */
+
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+#define TLCL_MAX_DEPTH			4
+#define RAW_TLCL_EBPF_PROGRAM_ID	1
 
 #endif

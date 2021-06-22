@@ -253,3 +253,18 @@ drop:
 fallback:
 	return 0;
 }
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tailcall test ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+#define dummy_tlcl_prog(__VAL) \
+	hike_elem_call_2(HIKE_EBPF_PROG_DUMMY_TLCL, (__VAL))
+
+HIKE_CHAIN_1(HIKE_CHAIN_DUMMY_TLCL_ID)
+{
+	__u32 i;
+
+	for (i = 1; i <= 4; ++i)
+		dummy_tlcl_prog(i);
+
+	return 0;
+}

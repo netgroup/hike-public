@@ -111,109 +111,45 @@ read -r -d '' sut_env <<-EOF
 	# It allows to load maps with many entries without failing
 	ulimit -l unlimited
 
-	# Load all the classifiers
-	bpftool prog loadall tailcall_test.o /sys/fs/bpf/progs/tailtest type xdp \
-		pinmaps /sys/fs/bpf/maps/tailtest
+	#########################
+	### raw tailcall test ###
+	#########################
+
+	# Load raw classifiers
+	bpftool prog loadall raw_tailcall.o /sys/fs/bpf/progs/rawtlcl type xdp \
+		pinmaps /sys/fs/bpf/maps/rawtlcl
+
+	bpftool map update pinned /sys/fs/bpf/maps/rawtlcl/raw_tlcl_jmp_map	\
+		key	hex 01 00 00 00						\
+		value	pinned /sys/fs/bpf/progs/rawtlcl/raw_tlcl_do_stuff
 
 	# Attach the (pinned) loader to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv					\
-		pinned /sys/fs/bpf/progs/tailtest/raw_tlcl_loader	\
+		pinned /sys/fs/bpf/progs/rawtlcl/raw_tlcl_loader	\
 		dev enp6s0f0
 
-	bpftool map update pinned /sys/fs/bpf/maps/tailtest/raw_tlcl_jmp_map	\
-		key	hex 01 00 00 00						\
-		value	pinned /sys/fs/bpf/progs/tailtest/raw_tlcl_do_stuff
 
-	/bin/bash
-	exit $?
+	##########################
+	### HIKe tailcall test ###
+	##########################
 
-	####### CLEAR BELOW #####
+	bpftool prog loadall hike_tailcall_loader.o /sys/fs/bpf/progs/hike type xdp \
+		pinmaps /sys/fs/bpf/maps/hike
 
-	# Load all the progs contained into net.o and pin them on the bpffs.
-	# ALl programs contained in net.o must reuse the maps that have been
-	# already created and pinned by the classifier. Indeed, we specify
-	# the maps that have to be re-bound to programs contained in progs.o
-	#
 	# MAP RE-BIND IS VERY IMPORTANT, OTHERWISE PROGRAMS WILL HAVE COPY
 	# OF THE SAME MAP AND THEY WILL NOT BE ABLE TO COMMUNICATE WITH EACH
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 	#
-	bpftool prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
+	bpftool prog loadall hike_tailcall_do_stuff.o /sys/fs/bpf/progs/hikestuff type xdp \
 		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
+			pinned	/sys/fs/bpf/maps/hike/gen_jmp_table	\
 		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
+			pinned /sys/fs/bpf/maps/hike/hike_chain_map 	\
 		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
+			pinned /sys/fs/bpf/maps/hike/pcpu_hike_chain_data_map \
 		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		pinmaps /sys/fs/bpf/maps/net
-
-	bpftool prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		pinmaps /sys/fs/bpf/maps/mon
-
-	bpftool prog loadall ip6_tos_cls.o /sys/fs/bpf/progs/ip6tos type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		pinmaps /sys/fs/bpf/maps/ip6tos
-
-	bpftool prog loadall app_cfg.o /sys/fs/bpf/progs/appcfg type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		pinmaps /sys/fs/bpf/maps/appcfg
-
-	bpftool prog loadall app_cfg_load.o /sys/fs/bpf/progs/appcfg type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		map name map_app_cfg					\
-			pinned /sys/fs/bpf/maps/appcfg/map_app_cfg
-
-	bpftool prog loadall app_cfg_store.o /sys/fs/bpf/progs/appcfg type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		map name map_app_cfg					\
-			pinned /sys/fs/bpf/maps/appcfg/map_app_cfg
-
-
-	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
-	bpftool net attach xdpdrv 					\
-		pinned /sys/fs/bpf/progs/init/hike_classifier dev enp6s0f0
-
-	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-	bpftool net attach xdpdrv 					\
-		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
+			pinned /sys/fs/bpf/maps/hike/hike_pcpu_shmem_map \
+		pinmaps /sys/fs/bpf/maps/hikestuff
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
 	# Let's populate the gen_jmp_table so that we can perform tail calls!
@@ -223,34 +159,13 @@ read -r -d '' sut_env <<-EOF
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0b 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_allow_any
+	bpftool map update pinned /sys/fs/bpf/maps/hike/gen_jmp_table 	\
+		key	hex 13 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/hikestuff/hvxdp_tlcl_do_stuff
 
-	# Register deny_any eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0c 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_drop_any
-
-	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0e 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/mon/hvxdp_pcpu_mon
-
-	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0f 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/ip6tos/hvxdp_ipv6_tos_cls
-
-	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 11 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/appcfg/hvxdp_app_cfg_load
-
-	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 12 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/appcfg/hvxdp_app_cfg_store
+	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
+	bpftool net attach xdpdrv 					\
+		pinned /sys/fs/bpf/progs/hike/hike_tlcl_loader dev enp6s0f1
 
 	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
 	# First of all we build the HIKe Chain program loader using the
@@ -261,18 +176,11 @@ read -r -d '' sut_env <<-EOF
 	# that is going to be generated.
 
 	${HIKECC} data/binaries/minimal_chain.hike.o			\
-		  /sys/fs/bpf/maps/init/hike_chain_map 			\
+		  /sys/fs/bpf/maps/hike/hike_chain_map 			\
 		  data/binaries/minimal_chain.hike.load.sh
 
 	# Load HIKe Chains calling the loader script we just built :-o
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
-
-	# Load the classifier map config for IPv6 addresses
-	/bin/bash data/classifier_config.load.sh
-
-	# Load the app_config.load.sh for setting the configs used by the
-	# HIKE Programs (apps) and Chains.
-	/bin/bash data/app_config.load.sh
 
 	/bin/bash
 EOF
