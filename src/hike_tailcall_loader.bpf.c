@@ -16,7 +16,7 @@
 __section("hike_tlcl_loader")
 int __xdp_hike_tlcl_loader(struct xdp_md *ctx)
 {
-	const __u32 chain_id = HIKE_CHAIN_DUMMY_TLCL_ID;
+	const __u32 chain_id = HIKE_CHAIN_TLCL_TEST_ID;
 	int rc;
 
 	DEBUG_PRINT(">>> HIKe VM Chain Boostrap, chain_ID=0x%x", chain_id);

@@ -41,7 +41,7 @@ enum {
 	HIKE_APP_CFG_VAL_NESTATE_CRIT	 = 1,
 };
 
-#define HIKE_EBPF_PROG_DUMMY_TLCL	19
+#define HIKE_EBPF_PROG_TLCL_DO_STUFF	19
 #define HIKE_EBPF_PROG_REDIRECT		20
 #define HIKE_EBPF_PROG_L2XCON		21
 
@@ -55,7 +55,7 @@ enum {
 #define HIKE_CHAIN_MON_ALLOW		80 /* 0x50 */
 #define HIKE_CHAIN_MON_DROP		81 /* 0x51 */
 
-#define HIKE_CHAIN_DUMMY_TLCL_ID	82 /* 0x52 */
+#define HIKE_CHAIN_TLCL_TEST_ID		82 /* 0x52 */
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
