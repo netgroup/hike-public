@@ -20,6 +20,7 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    app_cfg.bpf.c \
 	    app_cfg_store.bpf.c \
 	    app_cfg_load.bpf.c \
+	    tailcall_test.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c
