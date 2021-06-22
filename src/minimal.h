@@ -42,6 +42,8 @@ enum {
 };
 
 #define HIKE_EBPF_PROG_DUMMY_TLCL	19
+#define HIKE_EBPF_PROG_REDIRECT		20
+#define HIKE_EBPF_PROG_L2XCON		21
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
@@ -58,7 +60,8 @@ enum {
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-#define TLCL_MAX_DEPTH			4
-#define RAW_TLCL_EBPF_PROGRAM_ID	1
+#define TLCL_MAX_DEPTH			3
+#define RAW_TLCL_EBPF_DO_STUFF		1
+#define RAW_TLCL_EBPF_L2XCON		2
 
 #endif

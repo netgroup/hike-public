@@ -256,15 +256,21 @@ fallback:
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tailcall test ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-#define dummy_tlcl_prog(__VAL) \
+#define dummy_prog(__VAL) \
 	hike_elem_call_2(HIKE_EBPF_PROG_DUMMY_TLCL, (__VAL))
+
+#define l2xcon() \
+	hike_elem_call_1(HIKE_EBPF_PROG_L2XCON)
 
 HIKE_CHAIN_1(HIKE_CHAIN_DUMMY_TLCL_ID)
 {
 	__u32 i;
 
-	for (i = 1; i <= 4; ++i)
-		dummy_tlcl_prog(i);
+	for (i = 1; i <= TLCL_MAX_DEPTH; ++i)
+		dummy_prog(i);
+
+	/* redirect the packet (cross-connecting two interfaces) */
+	l2xcon();
 
 	return 0;
 }

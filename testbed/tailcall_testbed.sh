@@ -48,6 +48,12 @@ ip -netns tg addr add 10.12.1.1/24 dev enp6s0f0
 ip -netns tg addr add 12:2::1/64 dev enp6s0f1
 ip -netns tg addr add 10.12.2.1/24 dev enp6s0f1
 
+ip -netns tg -6 neigh add 12:1::2 lladdr 00:00:00:00:02:00 dev enp6s0f0
+ip -netns tg -6 neigh add fc00::2 lladdr 00:00:00:00:02:00 dev enp6s0f0
+ip -netns tg -6 neigh add fc02::2 lladdr 00:00:00:00:02:00 dev enp6s0f0
+
+ip -netns tg -6 neigh add 12:2::2 lladdr 00:00:00:00:02:01 dev enp6s0f1
+
 read -r -d '' tg_env <<-EOF
 	# Everything that is private to the bash process that will be launch
 	# mount the bpf filesystem.
@@ -55,11 +61,32 @@ read -r -d '' tg_env <<-EOF
 	# of the bpf filesystem. If you need to get access to the bpf filesystem
 	# (where maps are available), you need to use nsenter with -m and -t
 	# that points to the pid of the parent process (launching bash).
-	# mount -t bpf bpf /sys/fs/bpf/
-	# mount -t tracefs nodev /sys/kernel/tracing
+
+	mount -t bpf bpf /sys/fs/bpf/
+	mount -t tracefs nodev /sys/kernel/tracing
+
+	# With bpftool we cannot pin maps which have been already pinned
+	# on the same bpffs. The same also applies to eBPF programs.
+	# For this reason, we create {init,net} dirs in progs and
+	# {init,net} in maps.
+	#
+	mkdir -p /sys/fs/bpf/progs
+	mkdir -p /sys/fs/bpf/maps
 
 	# It allows to load maps with many entries without failing
-	# ulimit -l unlimited
+	ulimit -l unlimited
+
+	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rawpass type xdp
+
+	# Attach the (pinned) raw_pass program to netdev enp6s0f0 on the XDP hook.
+	bpftool net attach xdpdrv				\
+		pinned /sys/fs/bpf/progs/rawpass/xdp_pass	\
+		dev enp6s0f0
+
+	# Attach the (pinned) raw_pass program to netdev enp6s0f1 on the XDP hook.
+	bpftool net attach xdpdrv				\
+		pinned /sys/fs/bpf/progs/rawpass/xdp_pass	\
+		dev enp6s0f1
 
 	/bin/bash
 EOF
@@ -87,6 +114,12 @@ ip -netns sut addr add 10.12.1.2/24 dev enp6s0f0
 ip -netns sut addr add 12:2::2/64 dev enp6s0f1
 ip -netns sut addr add 10.12.2.2/24 dev enp6s0f1
 
+ip -netns sut -6 neigh add 12:1::1 lladdr 00:00:00:00:01:00 dev enp6s0f0
+ip -netns sut -6 neigh add fc00::1 lladdr 00:00:00:00:01:00 dev enp6s0f0
+ip -netns sut -6 neigh add fc02::1 lladdr 00:00:00:00:01:00 dev enp6s0f0
+
+ip -netns sut -6 neigh add 12:2::1 lladdr 00:00:00:00:01:01 dev enp6s0f1
+
 export HIKECC="../hike-tools/hikecc.sh"
 
 read -r -d '' sut_env <<-EOF
@@ -102,9 +135,7 @@ read -r -d '' sut_env <<-EOF
 
 	# With bpftool we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
-	# For this reason, we create {init,net} dirs in progs and
-	# {init,net} in maps.
-	#
+
 	mkdir -p /sys/fs/bpf/progs
 	mkdir -p /sys/fs/bpf/maps
 
@@ -119,9 +150,23 @@ read -r -d '' sut_env <<-EOF
 	bpftool prog loadall raw_tailcall.o /sys/fs/bpf/progs/rawtlcl type xdp \
 		pinmaps /sys/fs/bpf/maps/rawtlcl
 
+	# Tail calls table
 	bpftool map update pinned /sys/fs/bpf/maps/rawtlcl/raw_tlcl_jmp_map	\
 		key	hex 01 00 00 00						\
 		value	pinned /sys/fs/bpf/progs/rawtlcl/raw_tlcl_do_stuff
+
+	bpftool map update pinned /sys/fs/bpf/maps/rawtlcl/raw_tlcl_jmp_map	\
+		key	hex 02 00 00 00						\
+		value	pinned /sys/fs/bpf/progs/rawtlcl/raw_tlcl_l2xcon
+
+	# l2xcon table
+	bpftool map update pinned /sys/fs/bpf/maps/rawtlcl/raw_tlcl_l2xcon_map	\
+		key	hex 02 00 00 00						\
+		value	hex 03 00 00 00
+
+	bpftool map update pinned /sys/fs/bpf/maps/rawtlcl/raw_tlcl_l2xcon_map	\
+		key	hex 03 00 00 00						\
+		value	hex 02 00 00 00
 
 	# Attach the (pinned) loader to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv					\
@@ -151,6 +196,17 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/hike/hike_pcpu_shmem_map \
 		pinmaps /sys/fs/bpf/maps/hikestuff
 
+	bpftool prog loadall l2xcon.o /sys/fs/bpf/progs/l2xcon type xdp \
+		map name gen_jmp_table					\
+			pinned	/sys/fs/bpf/maps/hike/gen_jmp_table	\
+		map name hike_chain_map					\
+			pinned /sys/fs/bpf/maps/hike/hike_chain_map 	\
+		map name pcpu_hike_chain_data_map			\
+			pinned /sys/fs/bpf/maps/hike/pcpu_hike_chain_data_map \
+		map name hike_pcpu_shmem_map				\
+			pinned /sys/fs/bpf/maps/hike/hike_pcpu_shmem_map \
+		pinmaps /sys/fs/bpf/maps/l2xcon
+
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
 	# Let's populate the gen_jmp_table so that we can perform tail calls!
 
@@ -162,6 +218,20 @@ read -r -d '' sut_env <<-EOF
 	bpftool map update pinned /sys/fs/bpf/maps/hike/gen_jmp_table 	\
 		key	hex 13 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hikestuff/hvxdp_tlcl_do_stuff
+
+	bpftool map update pinned /sys/fs/bpf/maps/hike/gen_jmp_table 	\
+		key	hex 15 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/l2xcon/hvxdp_l2xcon
+
+
+	# l2xcon table
+	bpftool map update pinned /sys/fs/bpf/maps/l2xcon/l2xcon_map 	\
+		key	hex 02 00 00 00					\
+		value	hex 03 00 00 00
+
+	bpftool map update pinned /sys/fs/bpf/maps/l2xcon/l2xcon_map 	\
+		key	hex 03 00 00 00					\
+		value	hex 02 00 00 00
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv 					\

@@ -13,9 +13,14 @@
 
 #include "hike_vm.h"
 
+/* bpf_map() macro is shipped within the HIKe VM source code; however, we are
+ * not using any HIKe VM feature here.
+ */
+
 /* store the state of the loop variable between tail calls */
 bpf_map(raw_tlcl_status_map, PERCPU_ARRAY, __u32, __u32, 1);
 bpf_map(raw_tlcl_jmp_map, PROG_ARRAY, __u32, __u32, 8);
+bpf_map(raw_tlcl_l2xcon_map, ARRAY, __u32, __u32, 8);
 
 static __always_inline __u32 *get_loop_variable(void)
 {
@@ -42,7 +47,7 @@ raw_tlcl_jmp_check_limit(struct xdp_md *ctx, __u32 *loop_var, __u32 depth,
 __section("raw_tlcl_loader")
 int __xdp_raw_tlcl_loader(struct xdp_md *ctx)
 {
-	__u32 prog_id = RAW_TLCL_EBPF_PROGRAM_ID;
+	__u32 prog_id = RAW_TLCL_EBPF_DO_STUFF;
 	__u32 *i = get_loop_variable();
 	int rc;
 
@@ -76,12 +81,14 @@ drop:
 __section("raw_tlcl_do_stuff")
 int __xdp_raw_tlcl_do_stuff(struct xdp_md *ctx)
 {
-	__u32 prog_id = RAW_TLCL_EBPF_PROGRAM_ID;
+	__u32 prog_id = RAW_TLCL_EBPF_DO_STUFF;
 	__u32 *i = get_loop_variable();
 	int rc;
 
-	if (!i)
+	if (!i) {
+		bpf_printk(">>> __xdp_raw_tlcl_do_stuff cannot access to loop var");
 		goto drop;
+	}
 
 	DEBUG_PRINT(">>> __xdp_raw_tlcl_do_stuff loop var=%d", *i);
 
@@ -89,16 +96,36 @@ int __xdp_raw_tlcl_do_stuff(struct xdp_md *ctx)
 	if (!rc) {
 		DEBUG_PRINT(">>> __xdp_raw_tlcl_do_stuff loop end, exit loop var=%d",
 			    *i);
-		return XDP_PASS;
+
+		bpf_tail_call(ctx, &raw_tlcl_jmp_map, RAW_TLCL_EBPF_L2XCON);
+
+		bpf_printk(">>> __xdp_raw_tlcl_do_stuff fallthrough, drop");
+		goto drop;
 	}
 
 	/* in this example we treat the fallthrough as a failure */
 	bpf_printk(">>> __xdp_raw_tlcl_do_stuff tailcall fallthrough");
-	return XDP_ABORTED;
-
 drop:
-	bpf_printk(">>> __xdp_raw_tlcl_do_stuff cannot access to loop var");
 	return XDP_ABORTED;
+}
+
+__section("raw_tlcl_l2xcon")
+int __xdp_raw_tlcl_l2xcon(struct xdp_md *ctx)
+{
+	const __u32 iif = ctx->ingress_ifindex;
+	__u32 *oif;
+
+	oif = bpf_map_lookup_elem(&raw_tlcl_l2xcon_map, &iif);
+	if (!oif) {
+		bpf_printk(">>> __xdp_raw_tlcl_l2xcon iif=%d, invalid oif",
+			   iif);
+		return XDP_DROP;
+	}
+
+	DEBUG_PRINT(">>> __xdp_raw_tlcl_l2xcon cross-connecting iif=%d, oif=%d",
+		    iif, *oif);
+
+	return bpf_redirect(*oif, 0);
 }
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

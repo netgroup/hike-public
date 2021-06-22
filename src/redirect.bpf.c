@@ -13,17 +13,22 @@
 
 #include "hike_vm.h"
 
-HIKE_PROG(tlcl_do_stuff)
+/* Redirect frame to a given ifindex 
+ *
+ * input:
+ *  - REG2: interface index
+ *
+ * output: XDP_REDIRECT in case of success, XDP_ABORTED in case of error.
+ */
+HIKE_PROG(redirect)
 {
-	__u32 i = _I_REG(2);
+	const __u32 ifindex = _I_REG(2);
+	
+	DEBUG_PRINT("HIKe Prog: redirect_any REG_1=0x%llx, REG_2=0x%llx",
+		    _I_REG(1), ifindex);
 
-	DEBUG_PRINT("HIKe Prog: tlcl_do_stuff REG_2=0x%llx", i);
-
-	/* do some stuff here... */
-
-	/* give back the control to the HIKe VM */
-	return HIKE_XDP_VM;
+	return bpf_redirect(ifindex, 0);
 }
-EXPORT_HIKE_PROG(tlcl_do_stuff);
+EXPORT_HIKE_PROG(redirect);
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
