@@ -10,6 +10,7 @@ LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
 INCLUDES := -I$(OUTPUT)
 HIKE_VM_INCLUDES := -I$(abspath $(shell pwd))
 CFLAGS := -g -Wall
+HIKE_CFLAGS ?=
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 # eBPF programs; add more eBPF programs here.
@@ -94,11 +95,12 @@ abs_src_path = $(addprefix $(SRC_DIR)/,${1:.o=.c})
 $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) \
 				 $(wildcard *.h) vmlinux.h | $(OUTPUT)
 	$(call msg,PROG,$@)
-	$(Q)$(CLANG) -g						\
-		-Wall						\
+	$(Q)$(CLANG)						\
+		$(CFLAGS)					\
 		-O2 -target bpf 				\
 		-D__TARGET_ARCH_$(ARCH)				\
 		$(INCLUDES) $(HIKE_VM_INCLUDES)			\
+		$(HIKE_CFLAGS)				\
 		$(CLANG_BPF_SYS_INCLUDES)			\
 		-c $< -o $@
 	$(call msg,BTFDMP,$@)
@@ -124,11 +126,12 @@ $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) 
 $(addprefix $(OUTPUT)/,%.hike.o): $(addprefix $(SRC_DIR)/,%.hike.c) $(LIBBPF_OBJ) \
 				  $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,CHAIN,$@)
-	$(Q)$(CLANG) -g						\
-		-Wall						\
+	$(Q)$(CLANG)						\
+		$(CFLAGS)					\
 		-O2 -target bpf 				\
 		-D__TARGET_ARCH_$(ARCH)				\
 		$(INCLUDES) $(HIKE_VM_INCLUDES)			\
+		$(HIKE_CFLAGS)					\
 		$(CLANG_BPF_SYS_INCLUDES)			\
 		-c $< -o $@
 
