@@ -60,7 +60,11 @@ enum {
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-#define TLCL_MAX_DEPTH			3
+#ifndef TLCL_MAX_DEPTH
+/* default depth is 4, 3 do_stuff() and 1 X-connect */
+#define TLCL_MAX_DEPTH			4
+#endif
+
 #define RAW_TLCL_EBPF_DO_STUFF		1
 #define RAW_TLCL_EBPF_L2XCON		2
 
