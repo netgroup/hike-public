@@ -62,8 +62,13 @@ int __xdp_raw_tlcl_loader(struct xdp_md *ctx)
 
 	rc = raw_tlcl_jmp_check_limit(ctx, i, TLCL_MAX_DEPTH, prog_id);
 	if (!rc) {
-		DEBUG_PRINT(">>> __xdp_raw_tlcl_loader loop end, var=%d", *i);
-		return XDP_PASS;
+		DEBUG_PRINT(">>> __xdp_raw_tlcl_do_stuff loop end, exit loop var=%d",
+			    *i);
+
+		bpf_tail_call(ctx, &raw_tlcl_jmp_map, RAW_TLCL_EBPF_L2XCON);
+
+		bpf_printk(">>> __xdp_raw_tlcl_do_stuff fallthrough, drop");
+		goto drop;
 	}
 
 	/* in this example we treat the fallthrough as a failure */
