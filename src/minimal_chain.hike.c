@@ -9,13 +9,11 @@
 #include <linux/seg6.h>
 #include <linux/errno.h>
 
-#define HIKE_DEBUG 1
-#include "hike_vm.h"
-#include "parse_helpers.h"
-
 /* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
 #include "minimal.h"
 
+#include "hike_vm.h"
+#include "parse_helpers.h"
 
 HIKE_CHAIN_1(HIKE_CHAIN_FOO_ID)
 {
