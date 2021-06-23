@@ -15,9 +15,11 @@
 
 HIKE_PROG(tlcl_do_stuff)
 {
+#if HIKE_DEBUG == 1
 	__u32 i = _I_REG(2);
 
 	DEBUG_PRINT("HIKe Prog: tlcl_do_stuff REG_2=0x%llx", i);
+#endif
 
 	/* do some stuff here... */
 
