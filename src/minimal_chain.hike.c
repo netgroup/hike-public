@@ -264,9 +264,16 @@ HIKE_CHAIN_1(HIKE_CHAIN_TLCL_TEST_ID)
 {
 	__u32 i;
 
+	/* optimizer produces a sub-optimal code... so for performance reasons
+	 * it is better to optimize it manually... :-)
+	 */
+	__asm__ __volatile__
+		("r1 = " stringify(HIKE_EBPF_PROG_TLCL_DO_STUFF) "\t\n");
 #pragma unroll
-	for (i = 1; i <= TLCL_MAX_DEPTH; ++i)
-		do_some_stuff_on_packet();
+	for (i = 1; i <= TLCL_MAX_DEPTH; ++i) {
+		//do_some_stuff_on_packet();
+		__asm__ __volatile__("call 4352\t\n");
+	}
 
 	/* redirect the packet (cross-connecting two interfaces) */
 	l2xcon();
