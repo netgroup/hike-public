@@ -18,6 +18,7 @@ enum {
 	HIKE_PCPU_MON_EVENT_DROP	= 0,
 	HIKE_PCPU_MON_EVENT_ALLOW	= 1,
 	HIKE_PCPU_MON_EVENT_ERROR	= 2,
+	HIKE_PCPU_MON_EVENT_SET_ECN	= 3,
 };
 #define HIKE_EBPF_PROG_PCPU_MON		14
 #define HIKE_EBPF_PROG_IPV6_TOS_CLS	15
@@ -45,6 +46,9 @@ enum {
 #define HIKE_EBPF_PROG_REDIRECT		20
 #define HIKE_EBPF_PROG_L2XCON		21
 
+#define HIKE_EBPF_PROG_MMFWD		22 /* 0x16 */
+#define HIKE_EBPF_PROG_IPV6_SET_ECN	23 /* 0x17 */
+
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
 #define HIKE_CHAIN_FOO_ID		76 /* 0x4c */
@@ -57,6 +61,8 @@ enum {
 
 #define HIKE_CHAIN_TLCL_TEST_ID		82 /* 0x52 */
 
+#define HIKE_CHAIN_DDOS_MMFDW_ID	83 /* 0x53 */
+#define HIKE_CHAIN_DDOS_3STAGES_ID	84 /* 0x54 */
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
