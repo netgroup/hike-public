@@ -254,8 +254,8 @@ fallback:
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tailcall test ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-#define do_some_stuff_on_packet(__VAL) \
-	hike_elem_call_2(HIKE_EBPF_PROG_TLCL_DO_STUFF, (__VAL))
+#define do_some_stuff_on_packet() \
+	hike_elem_call_1(HIKE_EBPF_PROG_TLCL_DO_STUFF)
 
 #define l2xcon() \
 	hike_elem_call_1(HIKE_EBPF_PROG_L2XCON)
@@ -264,8 +264,9 @@ HIKE_CHAIN_1(HIKE_CHAIN_TLCL_TEST_ID)
 {
 	__u32 i;
 
+#pragma unroll
 	for (i = 1; i <= TLCL_MAX_DEPTH; ++i)
-		do_some_stuff_on_packet(i);
+		do_some_stuff_on_packet();
 
 	/* redirect the packet (cross-connecting two interfaces) */
 	l2xcon();
