@@ -262,6 +262,7 @@ fallback:
 
 HIKE_CHAIN_1(HIKE_CHAIN_TLCL_TEST_ID)
 {
+#if TLCL_MAX_DEPTH > 0
 	__u32 i;
 
 	/* optimizer produces a sub-optimal code... so for performance reasons
@@ -274,6 +275,7 @@ HIKE_CHAIN_1(HIKE_CHAIN_TLCL_TEST_ID)
 		//do_some_stuff_on_packet();
 		__asm__ __volatile__("call 4352\t\n");
 	}
+#endif
 
 	/* redirect the packet (cross-connecting two interfaces) */
 	l2xcon();
