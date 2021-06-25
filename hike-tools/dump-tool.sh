@@ -21,7 +21,19 @@ fi
 
 # --- DO NOT EDIT BELOW ---
 
-HIKE_CHAIN_NSINS_MAX=32
+SCRIPT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+HIKE_VM_CORE="${SCRIPT_DIR}/../src/hike_vm.h"
+
+HIKE_CHAIN_NINSN_MAX="$(grep -Eo \
+	"#define[[:blank:]]*HIKE_CHAIN_NINSN_MAX[[:blank:]]*([0-9]+)[[:blank:]]*" ${HIKE_VM_CORE} \
+	| awk '$3 ~ /^[0-9]+$/ {print $3}')"
+if [ -z "${HIKE_CHAIN_NINSN_MAX}" ]; then
+	echo "error: cannot get the max number of insns for the HIKe VM"
+	exit 1
+fi
+
+
+# FIXME: avoid to be harcoded but follow the same approch used for chain NINSN
 HIKE_CHAIN_HEADER_LEN=256 #in bytes
 
 TMP_PATH="/tmp"
@@ -130,7 +142,7 @@ if [ ${SIZE} -eq 0 ]; then
 fi
 
 NINSN=$((SIZE / 8))
-PAD=$((HIKE_CHAIN_NSINS_MAX * 8 - SIZE))
+PAD=$((HIKE_CHAIN_NINSN_MAX * 8 - SIZE))
 
 # write the number of instructions
 write_le16 "${TMP_HEADER}" ${NINSN} 4
