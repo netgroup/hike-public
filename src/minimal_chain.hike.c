@@ -319,3 +319,16 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_3STAGES_ID)
 
 	return 0;
 }
+
+#define trace_pass(__KEY_EVENT) \
+	hike_elem_call_2(HIKE_EBPF_PROG_TRACE_PASS, (__KEY_EVENT))
+
+HIKE_CHAIN_1(HIKE_CHAIN_DDOS_2STAGES_ID)
+{
+	/* set the ecn in the dscp field of ipv6 packet */
+	ipv6_set_ecn();
+
+	trace_pass(HIKE_PCPU_MON_EVENT_SET_ECN);
+
+	return 0;
+}

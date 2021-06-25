@@ -28,7 +28,8 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    redirect.bpf.c \
 	    l2xcon.bpf.c \
 	    mm_fwd.bpf.c \
-	    ip6_set_ecn.bpf.c
+	    ip6_set_ecn.bpf.c \
+	    trace_pass.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c

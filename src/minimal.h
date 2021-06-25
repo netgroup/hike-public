@@ -48,6 +48,7 @@ enum {
 
 #define HIKE_EBPF_PROG_MMFWD		22 /* 0x16 */
 #define HIKE_EBPF_PROG_IPV6_SET_ECN	23 /* 0x17 */
+#define HIKE_EBPF_PROG_TRACE_PASS	24 /* 0x18 */
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
@@ -63,6 +64,7 @@ enum {
 
 #define HIKE_CHAIN_DDOS_MMFDW_ID	83 /* 0x53 */
 #define HIKE_CHAIN_DDOS_3STAGES_ID	84 /* 0x54 */
+#define HIKE_CHAIN_DDOS_2STAGES_ID	85 /* 0x55 */
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
