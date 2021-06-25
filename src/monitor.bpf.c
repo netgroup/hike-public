@@ -41,7 +41,7 @@ HIKE_PROG(pcpu_mon)
 	__u64 tmp;
 
 	value = bpf_map_lookup_elem(&map_pcpu_mon, &key);
-	if (value) {
+	if (likely(value)) {
 		*value += 1;
 		rc = 0;
 		goto out;
