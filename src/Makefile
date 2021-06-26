@@ -30,7 +30,8 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    mm_fwd.bpf.c \
 	    ip6_set_ecn.bpf.c \
 	    trace_pass.bpf.c \
-	    ip6_kroute.bpf.c
+	    ip6_kroute.bpf.c \
+	    raw_ddos_mmrt.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c
