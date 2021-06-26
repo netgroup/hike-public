@@ -103,12 +103,12 @@ out:
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 #define PCPU_MON_INC_ALLOW()					\
-	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
-			 HIKE_PCPU_MON_EVENT_ALLOW, true)
+	hike_elem_call_2(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_ALLOW)
 
 #define PCPU_MON_INC_DROP()					\
-	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
-			 HIKE_PCPU_MON_EVENT_DROP, true)
+	hike_elem_call_2(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_DROP)
 
 
 #define IPV6_ICMP_PROTO			58
@@ -161,8 +161,8 @@ fallback:
 	hike_elem_call_2(HIKE_EBPF_PROG_DROP_ANY, (ETH_TYPE))
 
 #define PCPU_MON_INC_ERROR()					\
-	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
-			 HIKE_PCPU_MON_EVENT_ERROR, true)
+	hike_elem_call_2(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_ERROR)
 
 #define ipv6_tos_cls() \
 	hike_elem_call_1(HIKE_EBPF_PROG_IPV6_TOS_CLS)
@@ -300,8 +300,8 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_MMFDW_ID)
 	hike_elem_call_1(HIKE_EBPF_PROG_IPV6_SET_ECN)
 
 #define PCPU_MON_INC_SET_ECN()					\
-	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
-			 HIKE_PCPU_MON_EVENT_SET_ECN, true)
+	hike_elem_call_2(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_SET_ECN)
 
 #define ipv6_route() \
 	hike_elem_call_1(HIKE_EBPF_PROG_IPV6_KROUTE)
