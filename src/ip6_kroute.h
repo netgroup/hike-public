@@ -11,9 +11,31 @@
 
 #include "hdr_cursor.h"
 
+#ifndef AF_INET
 #define AF_INET			2
+#endif
+
+#ifndef AF_INET6
 #define AF_INET6		10
-#define IPV6_FLOWINFO_MASK	bpf_htonl(0x0FFFFFFF)
+#endif
+
+#define __IPV6_FLOWINFO_MASK	bpf_htonl(0x0FFFFFFF)
+
+#ifndef memset
+#define memset(dest, val, n) __builtin_memset((dest), (val), (n))
+#endif
+
+#ifndef memcpy
+#define memcpy(dest, src, n) __builtin_memcpy((dest), (src), (n))
+#endif
+
+#ifndef likely
+#define likely(x)	__builtin_expect(!!(x), 1)
+#endif
+
+#ifndef unlikely
+#define unlikely(x)	__builtin_expect(!!(x), 0)
+#endif
 
 static __always_inline int
 __ipv6_route(struct xdp_md *ctx, struct hdr_cursor *cur, __u32 flags)
@@ -42,7 +64,7 @@ __ipv6_route(struct xdp_md *ctx, struct hdr_cursor *cur, __u32 flags)
 	*saddr			= ip6h->saddr;
 	*daddr			= ip6h->daddr;
 	fib_params.family	= AF_INET6;
-	fib_params.flowinfo	= *((__be32 *)ip6h) & IPV6_FLOWINFO_MASK;
+	fib_params.flowinfo	= *((__be32 *)ip6h) & __IPV6_FLOWINFO_MASK;
 	fib_params.tot_len	= bpf_ntohs(ip6h->payload_len);
 	fib_params.l4_protocol	= ip6h->nexthdr;
 	fib_params.sport	= 0;
