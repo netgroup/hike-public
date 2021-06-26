@@ -303,8 +303,8 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_MMFDW_ID)
 	hike_elem_call_3(HIKE_EBPF_PROG_PCPU_MON,		\
 			 HIKE_PCPU_MON_EVENT_SET_ECN, true)
 
-#define allow_noargs() \
-	hike_elem_call_1(HIKE_EBPF_PROG_ALLOW_ANY)
+#define ipv6_route() \
+	hike_elem_call_1(HIKE_EBPF_PROG_IPV6_KROUTE)
 
 HIKE_CHAIN_1(HIKE_CHAIN_DDOS_3STAGES_ID)
 {
@@ -314,8 +314,8 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_3STAGES_ID)
 	/* step up the event referred to the ecn bit set */
 	PCPU_MON_INC_SET_ECN();
 
-	/* pass the packet to the kernel */
-	allow_noargs();
+	/* route the packet directly */
+	ipv6_route();
 
 	return 0;
 }

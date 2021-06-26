@@ -49,6 +49,7 @@ enum {
 #define HIKE_EBPF_PROG_MMFWD		22 /* 0x16 */
 #define HIKE_EBPF_PROG_IPV6_SET_ECN	23 /* 0x17 */
 #define HIKE_EBPF_PROG_TRACE_PASS	24 /* 0x18 */
+#define HIKE_EBPF_PROG_IPV6_KROUTE	25 /* 0x19 */
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 

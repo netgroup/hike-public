@@ -138,16 +138,6 @@ read -r -d '' sut_env <<-EOF
 	# OF THE SAME MAPS AND THEY WILL NOT BE ABLE TO COMMUNICATE WITH EACH
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 	#
-	bpftool prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
-		pinmaps /sys/fs/bpf/maps/net
 
 	bpftool prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
 		map name gen_jmp_table					\
@@ -171,13 +161,27 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
 		pinmaps /sys/fs/bpf/maps/ip6setecn
 
+	bpftool prog loadall ip6_kroute.o /sys/fs/bpf/progs/ip6krt type xdp \
+		map name gen_jmp_table					\
+			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
+		map name hike_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
+		map name pcpu_hike_chain_data_map			\
+			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
+		map name hike_pcpu_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		pinmaps /sys/fs/bpf/maps/ip6krt
+
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/init/hike_classifier dev enp6s0f0
 
+	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rpass type xdp \
+		pinmaps /sys/fs/bpf/maps/rpass
+
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
 	bpftool net attach xdpdrv 					\
-		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
+		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev enp6s0f1
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
 	# Let's populate the gen_jmp_table so that we can perform tail calls!
@@ -186,15 +190,6 @@ read -r -d '' sut_env <<-EOF
 	# Prog ID is defined in minimal.h; we need to parse that file and
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
-
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0b 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_allow_any
-
-	# Register deny_any eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
-		key	hex 0c 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/net/hvxdp_drop_any
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
 	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
@@ -206,6 +201,10 @@ read -r -d '' sut_env <<-EOF
 		key	hex 17 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/ip6setecn/hvxdp_ipv6_set_ecn
 
+	# Register count packet eBPF/HIKe Program, please see description above ;-)
+	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+		key	hex 19 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/ip6krt/hvxdp_ipv6_kroute
 
 	# HIKe Programs are now loaded, let's move on by loading the HIKe Chains.
 	# First of all we build the HIKe Chain program loader using the
@@ -223,7 +222,11 @@ read -r -d '' sut_env <<-EOF
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
 
 	# Load the ddos classifier map config for IPv6 addresses
-	/bin/bash data/ddos_classifier_config.load.sh
+	bpftool map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
+		key hex		00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 02 \
+		value hex 	54 00 00 00
+
+
 
 	/bin/bash
 EOF
