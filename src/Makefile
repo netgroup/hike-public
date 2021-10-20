@@ -100,6 +100,7 @@ abs_src_path = $(addprefix $(SRC_DIR)/,${1:.o=.c})
 $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) \
 				 $(wildcard *.h) vmlinux.h | $(OUTPUT)
 	$(call msg,PROG,$@)
+	[ ! -d @D ] && mkdir -p $(@D)
 	$(Q)$(CLANG)						\
 		$(CFLAGS)					\
 		-O2 -target bpf 				\
