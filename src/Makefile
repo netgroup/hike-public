@@ -132,6 +132,7 @@ $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) 
 $(addprefix $(OUTPUT)/,%.hike.o): $(addprefix $(SRC_DIR)/,%.hike.c) $(LIBBPF_OBJ) \
 				  $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,CHAIN,$@)
+	[ ! -d @D ] && mkdir -p $(@D)
 	$(Q)$(CLANG)						\
 		$(CFLAGS)					\
 		-O2 -target bpf 				\
