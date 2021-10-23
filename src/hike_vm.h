@@ -2,6 +2,8 @@
 #ifndef _HIKE_VM_H
 #define _HIKE_VM_H
 
+#include <stddef.h>
+
 #include <linux/errno.h>
 #include <linux/bpf.h>
 #include <linux/btf.h>
