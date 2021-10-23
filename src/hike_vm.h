@@ -1955,7 +1955,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			  jmp_cond, *reg_ref, <=, imm32, __u64);
 		/* ============================================= */
 		COND_JUMP(HIKE_JMP64 | HIKE_JLT | HIKE_X,
-			  jmp_cond, *reg_ref, <, reg_val, __s64);
+			  jmp_cond, *reg_ref, <, reg_val, __u64);
 		default:
 			return -EFAULT;
 		}
