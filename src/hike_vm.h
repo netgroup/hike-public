@@ -799,15 +799,15 @@ struct hike_pcpu_shared_mem_layout {
 /* XXX: HELPER FUNCTION IDs MUST be 16 bits long */
 
 #define __HIKE_HPFUNC_CALL_ELEM_NARGS_1_ID		0x11
-static int (* hike_elem_call_1) (__u32 id) =
+static __u64 (* hike_elem_call_1) (__u32 id) =
 	(void *)HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_1_ID);
 
 #define __HIKE_HPFUNC_CALL_ELEM_NARGS_2_ID		0x12
-static int (* hike_elem_call_2) (__u32 id, __u64 arg1) =
+static __u64 (* hike_elem_call_2) (__u32 id, __u64 arg1) =
 	(void *)HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_2_ID);
 
 #define __HIKE_HPFUNC_CALL_ELEM_NARGS_3_ID		0x13
-static int (* hike_elem_call_3) (__u32 id,__u64 arg1, __u64 arg2) =
+static __u64 (* hike_elem_call_3) (__u32 id,__u64 arg1, __u64 arg2) =
 	(void *)HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_3_ID);
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MAP DEFINITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
