@@ -2149,6 +2149,16 @@ static __always_inline int progname(struct xdp_md *ctx,			\
 	EVAL_CAT_6(___hike_map_export__, HIKE_VM_PROG_EBPF_PREFIX, _,	\
 	  	   progname, __, mapname)
 
+#define _I_ARG(reg)	_I_REG(reg)
+
+#define HVM_ARG0	_I_ARG(0)
+#define HVM_ARG1	_I_ARG(1)
+#define HVM_ARG2	_I_ARG(2)
+#define HVM_ARG3	_I_ARG(3)
+#define HVM_ARG4	_I_ARG(4)
+
+#define HVM_RET		HVM_ARG0
+
 /* #########################################################################
  * # API to export the binding between an XDP eBPF/HIKe program and its    #
  * # eBPF maps.                                                            #
