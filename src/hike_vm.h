@@ -822,7 +822,7 @@ bpf_map(pcpu_hike_chain_data_map, PERCPU_ARRAY,
 bpf_map(hike_chain_map, HASH,
 	__u32, struct hike_chain, HIKE_CHAIN_MAP_NELEM_MAX);
 
-#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	63
+#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	127
 struct hike_shared_mem_data {
 	__u8 data[HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE];
 	__u8 reserved;
