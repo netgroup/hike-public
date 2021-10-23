@@ -105,13 +105,13 @@ abs_src_path = $(addprefix $(SRC_DIR)/,${1:.o=.c})
 $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) \
 				 $(wildcard *.h) vmlinux.h | $(OUTPUT)
 	$(call msg,PROG,$@)
-	[ ! -d @D ] && mkdir -p $(@D)
+	@[ ! -d @D ] && mkdir -p $(@D)
 	$(Q)$(CLANG)						\
 		$(CFLAGS)					\
 		-O2 -target bpf 				\
 		-D__TARGET_ARCH_$(ARCH)				\
 		$(INCLUDES) $(HIKE_VM_INCLUDES)			\
-		$(HIKE_CFLAGS)				\
+		$(HIKE_CFLAGS)					\
 		$(CLANG_BPF_SYS_INCLUDES)			\
 		-c $< -o $@
 	$(call msg,BTFDMP,$@)
@@ -137,7 +137,7 @@ $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) 
 $(addprefix $(OUTPUT)/,%.hike.o): $(addprefix $(SRC_DIR)/,%.hike.c) $(LIBBPF_OBJ) \
 				  $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,CHAIN,$@)
-	[ ! -d @D ] && mkdir -p $(@D)
+	@[ ! -d @D ] && mkdir -p $(@D)
 	$(Q)$(CLANG)						\
 		$(CFLAGS)					\
 		-O2 -target bpf 				\
