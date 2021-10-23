@@ -50,6 +50,14 @@ enum {
 #define HIKE_EBPF_PROG_IPV6_SET_ECN	23 /* 0x17 */
 #define HIKE_EBPF_PROG_TRACE_PASS	24 /* 0x18 */
 #define HIKE_EBPF_PROG_IPV6_KROUTE	25 /* 0x19 */
+#define HIKE_EBPF_PROG_TRACE_DROP	26 /* 0x1a */
+
+#define HIKE_EBPF_PROG_IPV6_HSET_SRCDST 27 /* 0x1b */
+
+#define HIKE_EBPF_HIKE_PASS		28 /* 0x1c */
+#define HIKE_EBPF_HIKE_DROP		29 /* 0x1d */
+
+#define HIKE_EBPF_PROG_LSE		30 /* 0x1e */
 
 /* HIKe Chain IDs (ID must be > 64 (0x40)) */
 
@@ -66,6 +74,8 @@ enum {
 #define HIKE_CHAIN_DDOS_MMFDW_ID	83 /* 0x53 */
 #define HIKE_CHAIN_DDOS_3STAGES_ID	84 /* 0x54 */
 #define HIKE_CHAIN_DDOS_2STAGES_ID	85 /* 0x55 */
+
+#define HIKE_CHAIN_DDOS_FULL_ID		86 /* 0x56 */
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 

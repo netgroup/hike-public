@@ -332,3 +332,52 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_2STAGES_ID)
 
 	return 0;
 }
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+#define packet_pass() \
+	hike_elem_call_1(HIKE_EBPF_HIKE_PASS)
+
+#define packet_drop() \
+	hike_elem_call_1(HIKE_EBPF_HIKE_DROP)
+
+#define ipv6_hset_srcdst(__action) \
+	hike_elem_call_2(HIKE_EBPF_PROG_IPV6_HSET_SRCDST, (__action))
+
+#define ipv6_flow_meter_srcdst() \
+	hike_elem_call_1(HIKE_EBPF_PROG_LSE)
+
+#define IPV6_HSET_ACTION_LOOKUP			0
+#define IPV6_HSET_ACTION_ADD			1
+#define IPV6_HSET_ACTION_LR			2
+
+#define RX_ALLOWED_INTVAL			500000000 /* 0.5 secs */
+HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_ID)
+{
+	__s64 rc;
+	__u64 ts;
+
+	rc = ipv6_hset_srcdst(IPV6_HSET_ACTION_LR);
+	if (!rc)
+		goto drop;
+
+	ts = ipv6_flow_meter_srcdst();
+	if (ts < RX_ALLOWED_INTVAL) {
+		/* blacklist the current flow */
+		ipv6_hset_srcdst(IPV6_HSET_ACTION_ADD);
+		goto drop;
+	}
+
+	PCPU_MON_INC_ALLOW();
+	packet_pass();
+
+	/* never return from here */
+	return 0;
+
+drop:
+	PCPU_MON_INC_DROP();
+	packet_drop();
+
+	/* never return from here */
+	return 0;
+}
