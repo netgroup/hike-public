@@ -17,8 +17,11 @@
 
 #include "hdr_cursor.h"
 
+#define PKT_INFO_CB_SIZE	48
+
 struct pkt_info {
 	struct hdr_cursor cur;
+	__u8 cb[PKT_INFO_CB_SIZE];
 };
 
 static __always_inline struct hdr_cursor *pkt_info_cur(struct pkt_info *info)
