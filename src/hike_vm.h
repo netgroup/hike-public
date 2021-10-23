@@ -1910,9 +1910,24 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_JMP64 | HIKE_JLE | HIKE_K:
 		dst_reg = insn->hic_dst;
 		offset = insn->hic_off;
-		imm32 = insn->imm;
 
-		rc = __hike_chain_load_reg(cur_chain, dst_reg, &reg_val);
+		/* select the source: src register or immediate */
+		switch (HIKE_SRC(opcode)) {
+		case HIKE_K:
+			imm32 = insn->imm;
+			break;
+		case HIKE_X:
+			src_reg = insn->hic_src;
+			rc = __hike_chain_load_reg(cur_chain, src_reg,
+						   &reg_val);
+			if (rc < 0)
+				return rc;
+			break;
+		default:
+			return -EFAULT;
+		}
+
+		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
 		if (unlikely(rc < 0))
 			return rc;
 
@@ -1923,17 +1938,17 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		switch (opcode) {
 		COND_JUMP(HIKE_JMP64 | HIKE_JEQ | HIKE_K,
-			  jmp_cond, reg_val, ==, imm32, __u64);
+			  jmp_cond, *reg_ref, ==, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JNE | HIKE_K,
-			  jmp_cond, reg_val, !=, imm32, __u64);
+			  jmp_cond, *reg_ref, !=, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JGT | HIKE_K,
-			  jmp_cond, reg_val, >, imm32, __u64);
+			  jmp_cond, *reg_ref, >, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JGE | HIKE_K,
-			  jmp_cond, reg_val, >=, imm32, __u64);
+			  jmp_cond, *reg_ref, >=, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLT | HIKE_K,
-			  jmp_cond, reg_val, <, imm32, __u64);
+			  jmp_cond, *reg_ref, <, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_K,
-			  jmp_cond, reg_val, <=, imm32, __u64);
+			  jmp_cond, *reg_ref, <=, imm32, __u64);
 		default:
 			return -EFAULT;
 		}
