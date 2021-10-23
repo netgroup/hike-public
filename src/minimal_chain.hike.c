@@ -370,14 +370,12 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_ID)
 
 	PCPU_MON_INC_ALLOW();
 	packet_pass();
-
-	/* never return from here */
-	return 0;
+	goto out;
 
 drop:
 	PCPU_MON_INC_DROP();
 	packet_drop();
-
+out:
 	/* never return from here */
 	return 0;
 }
