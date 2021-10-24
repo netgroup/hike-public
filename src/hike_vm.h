@@ -1850,8 +1850,9 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		break;							\
 	}								\
 									\
-	if (!rc)							\
+	if (likely(!rc))						\
 		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);\
+									\
 	rc;								\
 })
 	/* ALU arithmetic  */
