@@ -1685,6 +1685,9 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	__hike_chain_upc_inc(cur_chain);
 	/* PC now points to PC + 1 */
 
+	/* good opcode descriptions are reported here:
+	 * https://github.com/iovisor/bpf-docs/blob/master/eBPF.md
+	 */
 	switch (opcode) {
 
 	/* convert endianess of a register */
