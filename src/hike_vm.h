@@ -1825,6 +1825,35 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 	} break;
 
+/* this macro is UGLY... but it allows me to emit good eBPF code avoiding the
+ * verifier to complain about optimizations that would have been here if I
+ * would have used functions instead...
+ * so for the moment let's keep this mess :-)
+ */
+#define ___ALU_LOAD_REGS_SIDE_EFFECT___()				\
+({									\
+	dst_reg = insn->hic_dst;					\
+									\
+	/* select the source: src register or immediate */		\
+	switch (HIKE_SRC(opcode)) {					\
+	case HIKE_K:							\
+		imm32 = insn->imm;					\
+		rc = 0;							\
+		break;							\
+	case HIKE_X:							\
+		src_reg = insn->hic_src;				\
+		rc = __hike_chain_load_reg(cur_chain, src_reg,		\
+					   &reg_val);			\
+		break;							\
+	default:							\
+		rc = -EFAULT;						\
+		break;							\
+	}								\
+									\
+	if (!rc)							\
+		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);\
+	rc;								\
+})
 	/* ALU arithmetic  */
 	case HIKE_ALU64 | HIKE_ADD | HIKE_K:
 	case HIKE_ALU64 | HIKE_AND | HIKE_K:
@@ -1861,25 +1890,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	/* ALU mov */
 	case HIKE_ALU64 | HIKE_MOV | HIKE_K:
 	case HIKE_ALU64 | HIKE_MOV | HIKE_X:
-		dst_reg = insn->hic_dst;
-
-		/* select the source: src register or immediate */
-		switch (HIKE_SRC(opcode)) {
-		case HIKE_K:
-			imm32 = insn->imm;
-			break;
-		case HIKE_X:
-			src_reg = insn->hic_src;
-			rc = __hike_chain_load_reg(cur_chain, src_reg,
-						   &reg_val);
-			if (rc < 0)
-				return rc;
-			break;
-		default:
-			return -EFAULT;
-		}
-
-		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
+		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
 		if (rc < 0)
 			return rc;
 
@@ -1899,16 +1910,6 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		break;
 
-	/* jump always */
-	case HIKE_JMP64 | HIKE_JA:
-		offset = insn->hic_off;
-
-		rc = __hike_chain_upc_add(cur_chain, offset);
-		if (unlikely(rc < 0))
-			return rc;
-
-		break;
-
 	/* conditional jump section using src and dst registers */
 	case HIKE_JMP64 | HIKE_JLT | HIKE_X:
 	/* conditional jump section using immediate */
@@ -1918,27 +1919,10 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_JMP64 | HIKE_JGE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JLT | HIKE_K:
 	case HIKE_JMP64 | HIKE_JLE | HIKE_K:
-		dst_reg = insn->hic_dst;
 		offset = insn->hic_off;
 
-		/* select the source: src register or immediate */
-		switch (HIKE_SRC(opcode)) {
-		case HIKE_K:
-			imm32 = insn->imm;
-			break;
-		case HIKE_X:
-			src_reg = insn->hic_src;
-			rc = __hike_chain_load_reg(cur_chain, src_reg,
-						   &reg_val);
-			if (rc < 0)
-				return rc;
-			break;
-		default:
-			return -EFAULT;
-		}
-
-		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
-		if (unlikely(rc < 0))
+		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
+		if (rc < 0)
 			return rc;
 
 #define COND_JUMP(OPCODE, VAR, DST, CMP_OP, SRC, TYPE)			\
@@ -1977,6 +1961,17 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		}
 
 		/* end of conditional jump section */
+		break;
+#undef ___ALU_LOAD_REGS_SIDE_EFFECT___
+
+	/* jump always */
+	case HIKE_JMP64 | HIKE_JA:
+		offset = insn->hic_off;
+
+		rc = __hike_chain_upc_add(cur_chain, offset);
+		if (unlikely(rc < 0))
+			return rc;
+
 		break;
 
 	/* HIKe exit for returning from a chain. */
