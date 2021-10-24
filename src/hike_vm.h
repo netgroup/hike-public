@@ -1858,21 +1858,14 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	/* ALU arithmetic  */
 	case HIKE_ALU64 | HIKE_ADD | HIKE_K:
 	case HIKE_ALU64 | HIKE_AND | HIKE_K:
-		dst_reg = insn->hic_dst;
-		imm32 = insn->imm;
+		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
+		if (rc < 0)
+			return rc;
 
 #define ALU(OPCODE, DST, OP, SRC, TYPE)					\
 	case (OPCODE):							\
 		DST = ((TYPE)DST) OP ((TYPE)SRC);			\
 		break
-
-		/* instead of calling both __hike_chain_{load/store}_reg, we use
-		 * directly one single function which takes the register's
-		 * reference at once.
-		 */
-		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
-		if (unlikely(rc < 0))
-			return rc;
 
 		/* apply DST = DST OP SRC/imm
 		 * for more details about type conversion:
