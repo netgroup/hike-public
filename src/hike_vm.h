@@ -1841,10 +1841,13 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		if (unlikely(rc < 0))
 			return rc;
 
-		/* apply DST = DST OP SRC/imm */
+		/* apply DST = DST OP SRC/imm
+		 * for more details about type conversion:
+		 * https://elixir.bootlin.com/linux/latest/source/kernel/bpf/core.c#L1433
+		 */
 		switch (opcode) {
-		ALU(HIKE_ALU64 | HIKE_ADD | HIKE_K, *reg_ref, +, imm32, __s32);
-		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __s32);
+		ALU(HIKE_ALU64 | HIKE_ADD | HIKE_K, *reg_ref, +, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __u64);
 		default:
 			return -EFAULT;
 		}
@@ -1883,9 +1886,9 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			break
 
 		switch (opcode) {
-		ALU_MOV(HIKE_ALU64 | HIKE_MOV | HIKE_K, *reg_ref, imm32, __s64);
+		ALU_MOV(HIKE_ALU64 | HIKE_MOV | HIKE_K, *reg_ref, imm32, __u64);
 		ALU_MOV(HIKE_ALU64 | HIKE_MOV | HIKE_X, *reg_ref, reg_val,
-			__s64);
+			__u64);
 		default:
 			return -EFAULT;
 		}
@@ -1940,6 +1943,9 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			VAR = ((TYPE)DST) CMP_OP ((TYPE)SRC);		\
 			break
 
+		/* all immedates are casted to __u64, see:
+		 * https://elixir.bootlin.com/linux/latest/source/kernel/bpf/core.c#L1592
+		 */
 		switch (opcode) {
 		COND_JUMP(HIKE_JMP64 | HIKE_JEQ | HIKE_K,
 			  jmp_cond, *reg_ref, ==, imm32, __u64);
