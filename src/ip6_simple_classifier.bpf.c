@@ -91,5 +91,6 @@ int __ipv6_simple_classifier(struct xdp_md *ctx)
 	/* default policy allows any unrecognized packed... */
 	return XDP_PASS;
 }
+EXPORT_HIKE_MAP(__ipv6_simple_classifier, ipv6_simple_classifier_map);
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
