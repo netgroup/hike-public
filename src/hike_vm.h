@@ -117,6 +117,10 @@ __be64 __always_inline bpf_htonll(__u64 val)
 })
 #endif
 
+#define ___CAT_1(a)			a
+#define __CAT_1(a)			___CAT_1(a)
+#define EVAL_CAT_1(a)			__CAT_1(a)
+
 #define ___CAT_2(a, b)			a##b
 #define __CAT_2(a, b)			___CAT_2(a, b)
 #define EVAL_CAT_2(a, b)		__CAT_2(a, b)
@@ -1403,7 +1407,6 @@ __hike_memory_store(int size, __u64 val, void *ptr, __u32 off, int len)
 #undef ___hike_memory_case_store
 }
 
-
 static __always_inline int
 __hike_memory_chain_stack_read(struct hike_chain_data *chain_data, __u64 *ref,
 			       const struct vaddr_info *vinfo, int size)
@@ -2184,19 +2187,41 @@ static __always_inline int progname(struct xdp_md *ctx,			\
  * #########################################################################
  */
 
-/* Export binding between HIKe eBPF/XDP progs and maps for HIKe/Eclat */
-#define EXPORT_HIKE_PROG_MAP(progname, mapname)				\
-struct __EXPORT_HIKE_PROG_MAP_NAME(progname, mapname) {			\
-	int (*__HIKE_VM_PROG_EBPF_NAME(progname))(struct xdp_md *);	\
+/*
+ * function f1:
+ * 	- concatenates progname with mapname according to a func-dependent
+ * 	  logic;
+ * function f2:
+ * 	- decorates the progname
+ */
+#define __EXPORT_HIKE_PROG_MAP(f1, f2, progname, mapname)		\
+struct f1(progname, mapname) {						\
+	int (*f2(progname))(struct xdp_md *);				\
 	struct ____btf_map_##mapname mapname;				\
 };									\
-struct __EXPORT_HIKE_PROG_MAP_NAME(progname, mapname)			\
+struct f1(progname, mapname)						\
 __attribute__((section(".hike.maps.export")))				\
-__EXPORT_HIKE_PROG_MAP_NAME(progname, mapname) = { 			\
-	.__HIKE_VM_PROG_EBPF_NAME(progname) = 				\
-		&__HIKE_VM_PROG_EBPF_NAME(progname),			\
+	f1(progname, mapname) = { 					\
+	.f2(progname) = 						\
+		&f2(progname),						\
 	.mapname = { 0, },						\
 }
+
+#define EXPORT_HIKE_PROG_MAP(progname, mapname) 			\
+	__EXPORT_HIKE_PROG_MAP(__EXPORT_HIKE_PROG_MAP_NAME, 		\
+			       __HIKE_VM_PROG_EBPF_NAME,		\
+			       progname, mapname)
+
+/* A loader/classifier program is NOT an HIKe eBPF program. It should be
+ * considered as n hybrid program (i.e.: half plain eBPF program, half HIKe
+ * eBPF program).
+ */
+#define __LOADER_PROG_MAP_NAME(progname, mapname)			\
+	EVAL_CAT_4(__hike_map_export__, progname, __, mapname)
+
+#define EXPORT_HIKE_MAP(progname, mapname) 				\
+	__EXPORT_HIKE_PROG_MAP(__LOADER_PROG_MAP_NAME, EVAL_CAT_1,	\
+			       progname, mapname)
 
 
 /* TODO: move in a sperate .h file (hike_vm_uapi.h) */
