@@ -140,64 +140,64 @@ read -r -d '' sut_env <<-EOF
 	mkdir -p /sys/fs/bpf/{progs/ipv6_hset_srcdst,maps/ipv6_hset_srcdst}
 	bpftool prog loadall ip6_hset_srcdst.o /sys/fs/bpf/progs/ipv6_hset_srcdst \
 		type xdp						\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/ipv6_hset_srcdst
 
 	mkdir -p /sys/fs/bpf/{progs/hike_pass,maps/hike_pass}
 	bpftool prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass \
 		type xdp						\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/hike_pass
 
 	mkdir -p /sys/fs/bpf/{progs/hike_drop,maps/hike_drop}
 	bpftool prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop \
 		type xdp						\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/hike_drop
 
 	mkdir -p /sys/fs/bpf/{progs/mon,maps/mon}
 	bpftool prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/mon
 
 	mkdir -p /sys/fs/bpf/{progs/lse,maps/lse}
 	bpftool prog loadall lastevent.o /sys/fs/bpf/progs/lse type xdp	\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/lse
 
 	# =================================================================== #
@@ -213,30 +213,30 @@ read -r -d '' sut_env <<-EOF
 #		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
-	# Let's populate the gen_jmp_table so that we can perform tail calls!
+	# Let's populate the hvm_hprog_map so that we can perform tail calls!
 
 	# Register allow_any eBPF/HIKe Program
 	# Prog ID is defined in minimal.h; we need to parse that file and
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1b 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/ipv6_hset_srcdst/hvxdp_ipv6_hset_srcdst
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1c 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_pass/hvxdp_hike_pass
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1d 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_drop/hvxdp_hike_drop
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1e 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/lse/hvxdp_pcpu_lse
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 0e 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/mon/hvxdp_pcpu_mon
 
@@ -252,7 +252,7 @@ read -r -d '' sut_env <<-EOF
 	# that is going to be generated.
 
 	${HIKECC} data/binaries/minimal_chain.hike.o			\
-		  /sys/fs/bpf/maps/init/hike_chain_map 			\
+		  /sys/fs/bpf/maps/init/hvm_chain_map 			\
 		  data/binaries/minimal_chain.hike.load.sh
 
 	# Load HIKe Chains calling the loader script we just built :-o

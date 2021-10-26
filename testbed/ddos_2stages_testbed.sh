@@ -139,36 +139,36 @@ read -r -d '' sut_env <<-EOF
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 	#
 	bpftool prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/net
 
 	bpftool prog loadall ip6_set_ecn.o /sys/fs/bpf/progs/ip6setecn type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/ip6setecn
 
 	bpftool prog loadall trace_pass.o /sys/fs/bpf/progs/tpass type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/init/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/init/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/init/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/init/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/tpass
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
@@ -180,7 +180,7 @@ read -r -d '' sut_env <<-EOF
 		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
-	# Let's populate the gen_jmp_table so that we can perform tail calls!
+	# Let's populate the hvm_hprog_map so that we can perform tail calls!
 
 	# Register allow_any eBPF/HIKe Program
 	# Prog ID is defined in minimal.h; we need to parse that file and
@@ -188,12 +188,12 @@ read -r -d '' sut_env <<-EOF
 	# to do that? :-)
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 17 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/ip6setecn/hvxdp_ipv6_set_ecn
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 18 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/tpass/hvxdp_trace_pass
 
@@ -207,7 +207,7 @@ read -r -d '' sut_env <<-EOF
 	# that is going to be generated.
 
 	${HIKECC} data/binaries/minimal_chain.hike.o			\
-		  /sys/fs/bpf/maps/init/hike_chain_map 			\
+		  /sys/fs/bpf/maps/init/hvm_chain_map 			\
 		  data/binaries/minimal_chain.hike.load.sh
 
 	# Load HIKe Chains calling the loader script we just built :-o

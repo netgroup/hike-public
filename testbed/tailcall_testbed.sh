@@ -186,40 +186,40 @@ read -r -d '' sut_env <<-EOF
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 	#
 	bpftool prog loadall hike_tailcall_do_stuff.o /sys/fs/bpf/progs/hikestuff type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/hike/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/hike/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/hike/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/hike/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/hike/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/hike/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/hike/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/hike/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/hikestuff
 
 	bpftool prog loadall l2xcon.o /sys/fs/bpf/progs/l2xcon type xdp \
-		map name gen_jmp_table					\
-			pinned	/sys/fs/bpf/maps/hike/gen_jmp_table	\
-		map name hike_chain_map					\
-			pinned /sys/fs/bpf/maps/hike/hike_chain_map 	\
-		map name pcpu_hike_chain_data_map			\
-			pinned /sys/fs/bpf/maps/hike/pcpu_hike_chain_data_map \
-		map name hike_pcpu_shmem_map				\
-			pinned /sys/fs/bpf/maps/hike/hike_pcpu_shmem_map \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/hike/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/hike/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/hike/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/hike/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/l2xcon
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
-	# Let's populate the gen_jmp_table so that we can perform tail calls!
+	# Let's populate the hvm_hprog_map so that we can perform tail calls!
 
 	# Register allow_any eBPF/HIKe Program
 	# Prog ID is defined in minimal.h; we need to parse that file and
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/hike/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/hike/hvm_hprog_map 	\
 		key	hex 13 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hikestuff/hvxdp_tlcl_do_stuff
 
-	bpftool map update pinned /sys/fs/bpf/maps/hike/gen_jmp_table 	\
+	bpftool map update pinned /sys/fs/bpf/maps/hike/hvm_hprog_map 	\
 		key	hex 15 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/l2xcon/hvxdp_l2xcon
 
@@ -246,7 +246,7 @@ read -r -d '' sut_env <<-EOF
 	# that is going to be generated.
 
 	${HIKECC} data/binaries/minimal_chain.hike.o			\
-		  /sys/fs/bpf/maps/hike/hike_chain_map 			\
+		  /sys/fs/bpf/maps/hike/hvm_chain_map 			\
 		  data/binaries/minimal_chain.hike.load.sh
 
 	# Load HIKe Chains calling the loader script we just built :-o

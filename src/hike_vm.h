@@ -192,7 +192,7 @@ do{								\
 #endif
 
 /* jmp table for hosting all the HIKe programs */
-bpf_map(gen_jmp_table, PROG_ARRAY, __u32, __u32, GEN_PROG_TABLE_SIZE);
+bpf_map(hvm_hprog_map, PROG_ARRAY, __u32, __u32, GEN_PROG_TABLE_SIZE);
 
 /* New ID specs:
  * an elem_ID (uprog ID/chain ID) is structured as follows:
@@ -815,14 +815,13 @@ static __u64 (* hike_elem_call_3) (__u32 id,__u64 arg1, __u64 arg2) =
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MAP DEFINITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 /* HIKe VM execution context */
-bpf_map(pcpu_hike_chain_data_map, PERCPU_ARRAY,
-	__u32, struct hike_chain_data, 1);
+bpf_map(hvm_cdata_map, PERCPU_ARRAY, __u32, struct hike_chain_data, 1);
 
 /* HIKe Chain Map which contains all the local HIKe chains in the node */
 #define HIKE_CHAIN_MAP_NELEM_MAX	128
 
-bpf_map(hike_chain_map, HASH,
-	__u32, struct hike_chain, HIKE_CHAIN_MAP_NELEM_MAX);
+bpf_map(hvm_chain_map, HASH, __u32, struct hike_chain,
+	HIKE_CHAIN_MAP_NELEM_MAX);
 
 #define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	127
 struct hike_shared_mem_data {
@@ -832,8 +831,8 @@ struct hike_shared_mem_data {
 
 /* HIKe per-cpu Shared Map */
 #define HIKE_SHARED_MAP_NELEM_MAX	1
-bpf_map(hike_pcpu_shmem_map, PERCPU_ARRAY,
-	__u32, struct hike_shared_mem_data, HIKE_SHARED_MAP_NELEM_MAX);
+bpf_map(hvm_shmem_map, PERCPU_ARRAY, __u32, struct hike_shared_mem_data,
+	HIKE_SHARED_MAP_NELEM_MAX);
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
@@ -885,7 +884,7 @@ static __always_inline struct hike_chain *hike_chain_lookup(const __s32 *id)
 	if (unlikely(*id < 0 || *id >= HIKE_CHAIN_MAP_NELEM_MAX))
 		return NULL;
 
-	hc = bpf_map_lookup_elem(&hike_chain_map, id);
+	hc = bpf_map_lookup_elem(&hvm_chain_map, id);
 	if (unlikely(!hc))
 		return NULL;
 
@@ -897,7 +896,7 @@ static __always_inline struct hike_chain_data *get_hike_chain_data()
 	struct hike_chain_data *hcd;
 	const __u32 id = 0;
 
-	hcd = bpf_map_lookup_elem(&pcpu_hike_chain_data_map, &id);
+	hcd = bpf_map_lookup_elem(&hvm_cdata_map, &id);
 	if (unlikely(!hcd))
 		return NULL;
 
@@ -1446,7 +1445,7 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 #define hike_pcpu_shmem() 					\
 ({								\
 	const __u32 __off = 0;					\
-	bpf_map_lookup_elem(&hike_pcpu_shmem_map, &__off);	\
+	bpf_map_lookup_elem(&hvm_shmem_map, &__off);		\
 })
 
 static __always_inline int hike_shared_mem_init(void)
@@ -1472,7 +1471,7 @@ __hike_pcpu_shared_memory_read(__u64 *ref, const struct vaddr_info *vinfo,
 	struct hike_shared_mem_data *shmem;
 	const __u32 off = 0;
 
-	shmem = bpf_map_lookup_elem(&hike_pcpu_shmem_map, &off);
+	shmem = bpf_map_lookup_elem(&hvm_shmem_map, &off);
 	if (!shmem)
 		return -ENOMEM;
 
@@ -1488,7 +1487,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 	struct hike_shared_mem_data *shmem;
 	const __u32 off = 0;
 
-	shmem = bpf_map_lookup_elem(&hike_pcpu_shmem_map, &off);
+	shmem = bpf_map_lookup_elem(&hvm_shmem_map, &off);
 	if (!shmem)
 		return -ENOMEM;
 
@@ -2023,7 +2022,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (rc == -EINPROGRESS)	{					\
 		switch (res.opcode) {					\
 		case HIKE_JMP64 | HIKE_CALL:				\
-			bpf_tail_call(ctx, &gen_jmp_table, res.prog_id);\
+			bpf_tail_call(ctx, &hvm_hprog_map, res.prog_id);\
 			/* fallback */					\
 			rc = -ENOENT;					\
 			break;						\
