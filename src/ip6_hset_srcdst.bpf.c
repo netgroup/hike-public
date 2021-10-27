@@ -117,7 +117,7 @@ HIKE_PROG(ipv6_hset_srcdst)
 	case IPV6_HSET_ACTION_ADD:
 		rc = ipv6_hset_srcdst_add_key(&key);
 		break;
-	case IPV6_HSET_ACTION_LOOKUP_AND_REFRESH:
+	case IPV6_HSET_ACTION_LOOKUP_AND_CLEAN:
 		rc = ipv6_hset_srcdst_del_key_timeout(&key);
 		break;
 	default:
