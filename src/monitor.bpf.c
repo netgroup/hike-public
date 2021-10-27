@@ -25,7 +25,7 @@ bpf_map(map_pcpu_mon, PERCPU_HASH, __u32, __u64, HIKE_PCPU_MON_COUNT_MAX);
  */
 HIKE_PROG(pcpu_mon)
 {
-	__u32 key = _I_REG(2);
+	__u32 key = HVM_ARG2;
 	__u64 *value;
 	__u64 tmp;
 
@@ -39,6 +39,7 @@ HIKE_PROG(pcpu_mon)
 	bpf_map_update_elem(&map_pcpu_mon, &key, &tmp, BPF_NOEXIST);
 
 out:
+	HVM_RET = 0;
 	return HIKE_XDP_VM;
 }
 EXPORT_HIKE_PROG(pcpu_mon);
