@@ -2252,7 +2252,7 @@ __attribute__((section(".hike.maps.export")))				\
  * eBPF program).
  */
 #define __LOADER_PROG_MAP_NAME(progname, mapname)			\
-	EVAL_CAT_4(__hike_map_export__, progname, __, mapname)
+	EVAL_CAT_4(___hike_map_export__, progname, __, mapname)
 
 #define EXPORT_HIKE_MAP(progname, mapname) 				\
 	__EXPORT_HIKE_PROG_MAP(__LOADER_PROG_MAP_NAME, EVAL_CAT_1,	\
