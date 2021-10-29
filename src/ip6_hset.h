@@ -16,11 +16,9 @@
 /* FIXME: make this value adjustable */
 #define HIKE_IPV6_HSET_EXP_TIMEOUT_NS 	60000000000ul /* 60 secs */
 
-enum {
-	IPV6_HSET_ACTION_LOOKUP			= 0,
-	IPV6_HSET_ACTION_ADD,
-	IPV6_HSET_ACTION_LOOKUP_AND_CLEAN,
-};
+#define	IPV6_HSET_ACTION_LOOKUP			0
+#define	IPV6_HSET_ACTION_ADD			1
+#define	IPV6_HSET_ACTION_LOOKUP_AND_CLEAN	2
 
 struct ipv6_hset_srcdst_key {
 	struct in6_addr saddr;
