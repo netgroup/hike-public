@@ -2163,7 +2163,7 @@ __HIKE_PROG_SIGNATURE_FUNC__(__HIKE_VM_PROG_EBPF_ALIAS_NAME(progname),	\
 			     ##__VA_ARGS__)				\
 
 #define __HIKE_VM_PROG_EBPF_ALIAS_NAME(progname)			\
-	EVAL_CAT_2(___hike_prog_alias___, progname)
+	EVAL_CAT_2(___hike_prog_alias__, progname)
 
 #define __DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, ...)			\
 __section(".hike.export.prog")						\
