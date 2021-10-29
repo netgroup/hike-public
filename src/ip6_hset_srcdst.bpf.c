@@ -135,4 +135,9 @@ drop:
 EXPORT_HIKE_PROG_2(ipv6_hset_srcdst, __u64, action);
 EXPORT_HIKE_PROG_MAP(ipv6_hset_srcdst, ipv6_hset_srcdst_map);
 
+/* Export const */
+EXPORT_HIKE_CONST(IPV6_HSET_ACTION_LOOKUP);
+EXPORT_HIKE_CONST(IPV6_HSET_ACTION_ADD);
+EXPORT_HIKE_CONST(IPV6_HSET_ACTION_LOOKUP_AND_CLEAN);
+
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
