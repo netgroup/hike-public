@@ -2198,6 +2198,19 @@ __DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, TA1 A1, TA2 A2, TA3 A3)
 static __always_inline int progname(struct xdp_md *ctx,			\
 				    struct hike_chain_regmem *regmem)
 
+/* Export HIKe eBPF const */
+#define __DEF_EXPORT_HIKE_CONST_VALUE(constvalue)			\
+	EVAL_CAT_2(___V__, constvalue)
+
+#define EXPORT_HIKE_CONST(constname)					\
+struct ___hike_const_export__##constname {				\
+	char *___C__##constname;					\
+	int __DEF_EXPORT_HIKE_CONST_VALUE(constname);			\
+};									\
+struct ___hike_const_export__##constname				\
+__section(".hike.const.export")						\
+___hike_const_export__##constname = { 0, }
+
 /* Shortcuts for accessing HIKe VM registers from an HIKe eBPF Program */
 #define _I_RREG(reg)	ACCESS_REF_REGMEM(regmem, reg)
 #define _I_REG(reg)	ACCESS_REGMEM(regmem, reg)
