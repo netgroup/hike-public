@@ -2166,7 +2166,7 @@ __HIKE_PROG_SIGNATURE_FUNC__(__HIKE_VM_PROG_EBPF_ALIAS_NAME(progname),	\
 	EVAL_CAT_2(___hike_prog_alias__, progname)
 
 #define __DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, ...)			\
-__section(".hike.export.prog")						\
+__section(".hike.prog.export")						\
 __u64 (*SIGNATURE)(__u32 prog_id, ##__VA_ARGS__) = (void *)0xdeadbeaf
 
 #define EXPORT_HIKE_PROG_SIGNATURE_1(SIGNATURE) 			\
