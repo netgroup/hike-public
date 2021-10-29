@@ -132,7 +132,7 @@ drop:
 	DEBUG_PRINT("ipv6_hset_srcdst: drop packet");
 	return HIKE_XDP_ABORTED;
 }
-EXPORT_HIKE_PROG(ipv6_hset_srcdst);
+EXPORT_HIKE_PROG_2(ipv6_hset_srcdst, __u64, action);
 EXPORT_HIKE_PROG_MAP(ipv6_hset_srcdst, ipv6_hset_srcdst_map);
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";

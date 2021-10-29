@@ -2127,9 +2127,9 @@ hike_chain_boostrap(struct xdp_md *ctx, __s32 chain_id)
 }
 
 #define __HIKE_VM_PROG_EBPF_NAME(progname)				\
-	EVAL_CAT_3(HIKE_VM_PROG_EBPF_PREFIX, _, progname) 
+	EVAL_CAT_3(HIKE_VM_PROG_EBPF_PREFIX, _, progname)
 
-#define EXPORT_HIKE_PROG(progname)					\
+#define __EXPORT_HIKE_PROG(progname, __HIKE_PROG_SIGNATURE_FUNC__, ...)	\
 __hike_vm_section_tail(progname)					\
 int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)		\
 {									\
@@ -2158,18 +2158,49 @@ int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)		\
 aborted:								\
 	DEBUG_PRINT("HIKe VM debug: HIKe VM abort, no action for packet");\
 	return XDP_ABORTED;						\
-}
+}									\
+__HIKE_PROG_SIGNATURE_FUNC__(__HIKE_VM_PROG_EBPF_ALIAS_NAME(progname),	\
+			     ##__VA_ARGS__)				\
+
+#define __HIKE_VM_PROG_EBPF_ALIAS_NAME(progname)			\
+	EVAL_CAT_2(___hike_prog_alias___, progname)
+
+#define __DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, ...)			\
+__section(".hike.export.prog")						\
+__u64 (*SIGNATURE)(__u32 prog_id, ##__VA_ARGS__) = (void *)0xdeadbeaf
+
+#define EXPORT_HIKE_PROG_SIGNATURE_1(SIGNATURE) 			\
+__DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE)
+
+#define EXPORT_HIKE_PROG_SIGNATURE_2(SIGNATURE, TA1, A1)		\
+__DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, TA1 A1)
+
+#define EXPORT_HIKE_PROG_SIGNATURE_3(SIGNATURE, TA1, A1, TA2, A2)	\
+__DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, TA1 A1, TA2 A2)
+
+#define EXPORT_HIKE_PROG_SIGNATURE_4(SIGNATURE, TA1, A1, TA2, A2,	\
+				     TA3, A3) 				\
+__DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, TA1 A1, TA2 A2, TA3 A3)
+
+
+/* Export the HIKe eBPF Program */
+#define EXPORT_HIKE_PROG(progname)					\
+	__EXPORT_HIKE_PROG(progname, EXPORT_HIKE_PROG_SIGNATURE_1)
+
+#define EXPORT_HIKE_PROG_1(progname)					\
+	EXPORT_HIKE_PROG(progname)
+
+#define EXPORT_HIKE_PROG_2(progname, TA1, A1)				\
+	__EXPORT_HIKE_PROG(progname, EXPORT_HIKE_PROG_SIGNATURE_2,	\
+			   TA1, A1)
 
 #define HIKE_PROG(progname)						\
 static __always_inline int progname(struct xdp_md *ctx,			\
 				    struct hike_chain_regmem *regmem)
 
+/* Shortcuts for accessing HIKe VM registers from an HIKe eBPF Program */
 #define _I_RREG(reg)	ACCESS_REF_REGMEM(regmem, reg)
 #define _I_REG(reg)	ACCESS_REGMEM(regmem, reg)
-
-#define __EXPORT_HIKE_PROG_MAP_NAME(progname, mapname) 			\
-	EVAL_CAT_6(___hike_map_export__, HIKE_VM_PROG_EBPF_PREFIX, _,	\
-	  	   progname, __, mapname)
 
 #define _I_ARG(reg)	_I_REG(reg)
 
@@ -2186,6 +2217,10 @@ static __always_inline int progname(struct xdp_md *ctx,			\
  * # eBPF maps.                                                            #
  * #########################################################################
  */
+
+#define __EXPORT_HIKE_PROG_MAP_NAME(progname, mapname) 			\
+	EVAL_CAT_6(___hike_map_export__, HIKE_VM_PROG_EBPF_PREFIX, _,	\
+		   progname, __, mapname)
 
 /*
  * function f1:
