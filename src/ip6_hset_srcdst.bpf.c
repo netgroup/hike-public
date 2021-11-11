@@ -17,7 +17,10 @@
 /* maps are defined here */
 #include "ip6_hset.h"
 
-bpf_map(ipv6_hset_srcdst_map,
+#define HIKE_HSET_PROG_NAME	ipv6_hset_srcdst
+#define HIKE_HSET_MAP_NAME	ipv6_hset_srcdst_map
+
+bpf_map(HIKE_HSET_MAP_NAME,
 	HASH,
 	struct ipv6_hset_srcdst_key,
 	struct ipv6_hset_value,
@@ -92,7 +95,7 @@ ipv6_hset_srcdst_del_key_timeout(struct ipv6_hset_srcdst_key *key)
  * output:
  *  - REG0:	ret code operation
  */
-HIKE_PROG(ipv6_hset_srcdst)
+HIKE_PROG(HIKE_HSET_PROG_NAME)
 {
 	struct pkt_info *info = hike_pcpu_shmem();
 	struct ipv6_hset_srcdst_key key;
@@ -134,8 +137,8 @@ drop:
 	DEBUG_PRINT("ipv6_hset_srcdst: drop packet");
 	return HIKE_XDP_ABORTED;
 }
-EXPORT_HIKE_PROG_2(ipv6_hset_srcdst, __u64, action);
-EXPORT_HIKE_PROG_MAP(ipv6_hset_srcdst, ipv6_hset_srcdst_map);
+EXPORT_HIKE_PROG_2(HIKE_HSET_PROG_NAME, __u64, action);
+EXPORT_HIKE_PROG_MAP(HIKE_HSET_PROG_NAME, HIKE_HSET_MAP_NAME);
 
 /* Export const */
 EXPORT_HIKE_CONST(IPV6_HSET_ACTION_LOOKUP);
