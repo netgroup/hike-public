@@ -1,11 +1,29 @@
-#define REAL
-//#define REPL
+#ifndef _TB_DEFS_H 
+#define _TB_DEFS_H
+
+#ifndef REAL
+  #ifndef REPL
+    #error REPL or REAL must be defined!
+  #endif
+#endif
+
+#ifdef REAL
+  #ifdef REPL
+    #error REPL and REAL cannot be defined both!
+  #endif
+#endif
+
+
+#include <linux/in6.h>
 
 //rate : 10000 token/s bucket size : 100 
 //#define TB_DEFAULT 1
 
 //rate : 100000 token/s bucket size : 1000 
-#define TB_DEFAULT 2
+//#define TB_DEFAULT 2
+
+//rate : 20 token/s bucket size : 5 
+#define TB_DEFAULT 3
 
 
 #define U64 __u64
@@ -40,4 +58,30 @@
   #define BUCKET_SIZE 1024000
   #define BASE_TIME_BITS 30
   #define SHIFT_TOKENS 10
+#endif
+
+//rate : 20 token/s bucket size : 5 
+#if TB_DEFAULT == 3
+  #define RATE 22517998 
+  #define BUCKET_SIZE 5242880
+  #define BASE_TIME_BITS 30
+  #define SHIFT_TOKENS 20
+#endif
+
+
+/*
+  rate is expressed in (tokens/(2^shift_tokens)) / (2^base_time_bits ns)
+  bucket_size is expressed in tokens/(2^shift_tokens) 
+  last_tokens is expressed in tokens/(2^shift_tokens)
+  last_time is expressed in ns
+*/
+struct flow {
+  U64 rate;
+  U64 bucket_size;
+  U64 last_tokens;
+  U64 last_time;
+  U64 base_time_bits;   
+  U64 shift_tokens;     
+} ;
+
 #endif
