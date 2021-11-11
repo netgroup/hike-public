@@ -82,6 +82,8 @@ ipv6_hset_srcdst_del_key_timeout(struct ipv6_hset_srcdst_key *key)
  *	the blacklist or not;
  *  ii) with ARG2 == IPV6_HSET_ACTION_ADD, add the packet to the blacklist if
  *	it is not already present.
+ * iii) with ARG2 == IPV6_HSET_ACTION_LOOKUP_AND_CLEAN, add the packet to the
+ *	blacklist if it is not already present and clean up an expired entry.
  *
  * input:
  * - ARG1:	HIKe Program ID;
