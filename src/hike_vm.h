@@ -2245,7 +2245,7 @@ ___hike_const_export__##constname = { 0, }
 #define __EXPORT_HIKE_PROG_MAP(f1, f2, progname, mapname)		\
 struct f1(progname, mapname) {						\
 	int (*f2(progname))(struct xdp_md *);				\
-	struct ____btf_map_##mapname mapname;				\
+	struct EVAL_CAT_2(____btf_map_, mapname) mapname;		\
 };									\
 struct f1(progname, mapname)						\
 __attribute__((section(".hike.maps.export")))				\
