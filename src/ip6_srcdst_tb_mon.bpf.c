@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
-#define REAL
-//#define REPL
+//#define REAL
+#define REPL
 
 #include <stddef.h>
 #include <linux/in.h>
@@ -13,41 +13,25 @@
 
 #ifdef REAL
   /* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
-  #include "tb_defs.h" //replicated
+  #include "tb_defs.h"
   #include "hike_vm.h"
   #include "parse_helpers.h"
   #include "ip6_hset.h"
   
-  //FIXME it is duplicated
-  struct flow {
-    U64 rate;
-    U64 bucket_size;
-    U64 last_tokens;
-    U64 last_time;
-    U64 base_time_bits;   
-    U64 shift_tokens;     
-  } ;
-  
 #endif  
 
-
 #ifdef REPL
-  #define HIKE_DEBUG 1 //replicated
+  #define HIKE_DEBUG 1 
   #include "tb_defs.h"
   #include "ip6_hset_repl.h"
   #include "mock.h"
+  #include "get_time.h" 
+  #include "mock_ebpf_help.h"
 
-  //FIXME maybe move in a .h
-  U64 HVM_RET=0;
   U64 REQUIRED_TOKENS = 1;
   U64 INJECTED_DELTA = 0;
-  #include "get_time.h" // not needed in REAL 
-  #define ctx NULL
-
-  static struct flow my_flow;
 
 #endif
-
 
 #define HIKE_PCPU_LSE_MAX	4096
 
@@ -59,18 +43,6 @@ bpf_map(MAP_NAME_1,
 	struct ipv6_hset_srcdst_key,
 	struct flow,
 	HIKE_PCPU_LSE_MAX);
-
-#ifdef REPL
-/* eBPF program helpers */
-void *bpf_map_lookup_elem(void *map, void *key) {
-  struct flow * f = &my_flow;
-  return f;
-}
-long bpf_map_update_elem(void *map, void *key, void *value, U64 flags) {
-  return 0;
-}
-long bpf_map_delete_elem(void *map, void *key);
-#endif
 
 #define get_flow(key) \
 bpf_map_lookup_elem(&MAP_NAME_1, key)
@@ -97,23 +69,16 @@ static __always_inline struct flow * set_flow (struct flow * f,
   return f;
 }   
 
-
-/* per-CPU Token Bucket Monitor HIKe Program
- *
+/* ip6_srcdst_tb_mon ()
+ * 
+ * per-CPU Token Bucket Monitor HIKe Program
+ * 
  * input:
  * - ARG1:	HIKe Program ID;
- */
-
-/*
-  ip6_srcdst_tb_mon ()
-
-  returns IN_PROFILE, OUT_PROFILE in HVM_RET
+ *
+ * returns IN_PROFILE, OUT_PROFILE in HVM_RET
 */
-//int ip6_srcdst_tb_mon ( U64 required_tokens) {
 HIKE_PROG(HIKE_PROG_NAME) {
-  //DEBUG_PRINT("%llu\n",sizeof(required_tokens));
-
-  //struct pkt_info *info = hike_pcpu_shmem();
 
   U64 current_time;
   U64 delta;
