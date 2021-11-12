@@ -54,7 +54,7 @@ bpf_map(MAP_NAME_1,
   bpf_map_lookup_elem_tb(&MAP_NAME_1, key)
 
   #define add_flow(key, flow) \
-  bpf_map_update_elem_tb(&_MAP_NAME_1, key, flow, BPF_ANY)
+  bpf_map_update_elem_tb(&MAP_NAME_1, key, flow, BPF_ANY)
 #endif  
 
 
