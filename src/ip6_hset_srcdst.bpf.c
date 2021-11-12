@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
+/* HIKe Prog Name comes always first */
+#define HIKE_PROG_NAME		ipv6_hset_srcdst
+
 #include <stddef.h>
 #include <linux/in.h>
 #include <linux/if_ether.h>
@@ -17,7 +20,7 @@
 /* maps are defined here */
 #include "ip6_hset.h"
 
-#define HIKE_HSET_PROG_NAME	ipv6_hset_srcdst
+#define HIKE_HSET_PROG_NAME	HIKE_PROG_NAME
 #define HIKE_HSET_MAP_NAME	ipv6_hset_srcdst_map
 
 bpf_map(HIKE_HSET_MAP_NAME,
@@ -134,7 +137,7 @@ HIKE_PROG(HIKE_HSET_PROG_NAME)
 	return HIKE_XDP_VM;
 
 drop:
-	DEBUG_PRINT("ipv6_hset_srcdst: drop packet");
+	DEBUG_HKPRG_PRINT("drop packet");
 	return HIKE_XDP_ABORTED;
 }
 EXPORT_HIKE_PROG_2(HIKE_HSET_PROG_NAME, __u64, action);
