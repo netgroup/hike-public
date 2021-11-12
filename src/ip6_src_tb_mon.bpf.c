@@ -3,8 +3,8 @@
 /* HIKe Prog Name comes always first */
 #define HIKE_PROG_NAME    ip6_src_tb_mon
 
-//#define REAL
-#define REPL
+#define REAL
+//#define REPL
 
 #include <stddef.h>
 #include <linux/in.h>
