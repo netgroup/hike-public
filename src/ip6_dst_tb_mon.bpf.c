@@ -103,7 +103,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
   struct pkt_info *info = hike_pcpu_shmem();
   struct hdr_cursor *cur;
 
-  DEBUG_PRINT("Hi there!\n");
+  DEBUG_PRINT("Hi there!");
 
 	/* take the reference to the cursor object which has been saved into
 	 * the HIKe per-cpu shared memory
@@ -175,7 +175,7 @@ out:
   }
 	return HIKE_XDP_VM;
 drop:
-  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet\n");
+  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet");
 	return HIKE_XDP_ABORTED;
 
   return 0;
