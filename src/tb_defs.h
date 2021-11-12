@@ -84,4 +84,12 @@ struct flow {
   U64 shift_tokens;     
 } ;
 
+/*
+
+*/
+struct flow_meter_basic {
+  U64 count;
+} ;
+
+
 #endif

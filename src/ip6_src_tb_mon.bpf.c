@@ -17,7 +17,6 @@
   #include "hike_vm.h"
   #include "parse_helpers.h"
   #include "ip6_hset.h"
-  
 #endif  
 
 #ifdef REPL
@@ -25,12 +24,9 @@
   #include "tb_defs.h"
   #include "ip6_hset_repl.h"
   #include "mock.h"
-  #include "get_time.h" 
-  #include "mock_ebpf_help.h"
 
-  U64 REQUIRED_TOKENS = 1;
-  U64 INJECTED_DELTA = 0;
-
+  extern U64 REQUIRED_TOKENS;
+  extern U64 INJECTED_DELTA;
 #endif
 
 #define HIKE_PCPU_LSE_MAX	4096
@@ -44,14 +40,21 @@ bpf_map(MAP_NAME_1,
 	struct flow,
 	HIKE_PCPU_LSE_MAX);
 
-#define get_flow(key) \
-bpf_map_lookup_elem(&MAP_NAME_1, key)
-//void *bpf_map_lookup_elem(struct bpf_map *map, const void *key)
+#ifdef REAL
+  #define get_flow(key) \
+  bpf_map_lookup_elem(&MAP_NAME_1, key)
 
-#define add_flow(key, flow) \
-bpf_map_update_elem(&MAP_NAME_1, key, flow, BPF_ANY)
-//long bpf_map_update_elem (struct bpf_map *map, const void *key, const void *value, u64 flags)
+  #define add_flow(key, flow) \
+  bpf_map_update_elem(&MAP_NAME_1, key, flow, BPF_ANY)
+#endif  
 
+#ifdef REPL
+  #define get_flow(key) \
+  bpf_map_lookup_elem_tb(&MAP_NAME_1, key)
+
+  #define add_flow(key, flow) \
+  bpf_map_update_elem_tb(&MAP_NAME_1, key, flow, BPF_ANY)
+#endif  
 
 static __always_inline struct flow * set_flow (struct flow * f, 
   U64 in_rate,
@@ -94,8 +97,6 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   struct pkt_info *info = hike_pcpu_shmem();
   struct hdr_cursor *cur;
-
-  DEBUG_PRINT("Hi there!\n");
 
 	/* take the reference to the cursor object which has been saved into
 	 * the HIKe per-cpu shared memory
@@ -167,7 +168,8 @@ out:
   }
 	return HIKE_XDP_VM;
 drop:
-	DEBUG_PRINT("ip6_srcdst_tb_mon: drop packet");
+
+  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet\n");
 	return HIKE_XDP_ABORTED;
 
   return 0;
@@ -175,4 +177,6 @@ drop:
 EXPORT_HIKE_PROG(HIKE_PROG_NAME);
 EXPORT_HIKE_PROG_MAP(HIKE_PROG_NAME, MAP_NAME_1);
 
+#ifdef REAL
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
+#endif
