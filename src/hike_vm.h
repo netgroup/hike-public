@@ -60,8 +60,6 @@
 #endif
 
 #if HIKE_DEBUG == 1
-#define STR_PRINT(x) #x
-#define MYEXP(x) STR_PRINT(x)
 #define DEBUG_PRINT(...)					\
 do{								\
 		bpf_printk(__VA_ARGS__);			\
