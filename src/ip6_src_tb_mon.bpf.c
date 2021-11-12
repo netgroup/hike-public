@@ -107,7 +107,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   current_time = GET_TIME;
 
-  ret_code = ipv6_hset_srcdst_get_key(ctx, cur, &key);
+  ret_code = ipv6_hset_src_get_key(ctx, cur, &key);
   if (ret_code !=0) {
     goto drop;
   }

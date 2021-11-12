@@ -34,7 +34,7 @@
 #define HIKE_PCPU_LSE_MAX	4096
 
 #define HIKE_PROG_NAME ip6_srcdst_tb_mon
-#define MAP_NAME_1 map_pcpu_tb
+#define MAP_NAME_1 pcpu_srcdst_tb_mon
 
 bpf_map(MAP_NAME_1,
 	LRU_PERCPU_HASH,

@@ -30,12 +30,12 @@
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define HIKE_PROG_NAME ip6_srcdst_mtr_basic
-#define MAP_NAME_1 pcpu_mtr_base
+#define HIKE_PROG_NAME ip6_dst_mtr_basic
+#define MAP_NAME_1 pcpu_dst_mtr_basic
 
 bpf_map(MAP_NAME_1,
 	LRU_PERCPU_HASH,
-	struct ipv6_hset_srcdst_key,
+	struct ipv6_hset_dst_key,
 	struct flow_meter_basic,
 	HIKE_PCPU_LSE_MAX);
 
@@ -96,7 +96,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 	if (unlikely(!cur))
 		goto drop;
 
-  ret_code = ipv6_hset_srcdst_get_key(ctx, cur, &key);
+  ret_code = ipv6_hset_dst_get_key(ctx, cur, &key);
   if (ret_code !=0) {
     goto drop;
   }
