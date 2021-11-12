@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
+/* HIKe Prog Name comes always first */
+#define HIKE_PROG_NAME    ip6_srcdst_tb_mon
+
 //#define REAL
 #define REPL
 
@@ -33,7 +36,6 @@
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define HIKE_PROG_NAME ip6_srcdst_tb_mon
 #define MAP_NAME_1 pcpu_srcdst_tb_mon
 
 bpf_map(MAP_NAME_1,

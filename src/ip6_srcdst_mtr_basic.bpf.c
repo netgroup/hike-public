@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
+/* HIKe Prog Name comes always first */
+#define HIKE_PROG_NAME    ip6_srcdst_mtr_basic
+
 //#define REAL
 #define REPL
 
@@ -30,7 +33,6 @@
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define HIKE_PROG_NAME ip6_srcdst_mtr_basic
 #define MAP_NAME_1 pcpu_mtr_base
 
 bpf_map(MAP_NAME_1,
@@ -121,7 +123,7 @@ out:
 	return HIKE_XDP_VM;
 drop:
 
-  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet\n");
+  DEBUG_HKPRG_PRINT("drop packet\n");
 	return HIKE_XDP_ABORTED;
   
   return 0;
