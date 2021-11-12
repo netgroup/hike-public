@@ -64,8 +64,19 @@
 do{								\
 		bpf_printk(__VA_ARGS__);			\
 } while (0)
+
+#ifdef HIKE_PROG_NAME
+#define DEBUG_HKPRG_PRINT(...)					\
+do {								\
+	DEBUG_PRINT(stringify(HIKE_PROG_NAME)": " __VA_ARGS__);	\
+} while (0)
 #else
+#define DEBUG_HKPRG_PRINT(...) DEBUG_PRINT(__VA_ARGS__)
+#endif
+
+#else /* HIKE_DEBUG != 1 */
 #define DEBUG_PRINT(...) do {} while (0)
+#define DEBUG_HKPRG_PRINT(...) do {} while (0)
 #endif
 
 /* jmp table for hosting all the HIKe programs */
