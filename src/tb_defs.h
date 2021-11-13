@@ -30,6 +30,8 @@
 //#define __u64 unsigned long long
 //#define FLOW_KEY_TYPE unsigned long 
 #define FLOW_KEY_TYPE struct ipv6_hset_srcdst_key
+#define FLOW_KEY_TYPE_SRC struct ipv6_hset_src_key
+#define FLOW_KEY_TYPE_DST struct ipv6_hset_dst_key
 #define E_INVAL -3
 #define E_NO_KEY -2
 #define OUT_PROFILE -1
