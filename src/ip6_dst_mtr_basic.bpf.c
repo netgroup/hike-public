@@ -83,7 +83,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   struct flow_meter_basic * f;
 
-  FLOW_KEY_TYPE key;
+  FLOW_KEY_TYPE_DST key;
   struct flow_meter_basic my_flow;
 
   struct pkt_info *info = hike_pcpu_shmem();

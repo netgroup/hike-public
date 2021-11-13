@@ -94,7 +94,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   struct flow * f;
 
-  FLOW_KEY_TYPE key;
+  FLOW_KEY_TYPE_SRC key;
   struct flow my_flow;
 
   struct pkt_info *info = hike_pcpu_shmem();
