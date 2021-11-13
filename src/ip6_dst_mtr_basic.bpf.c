@@ -116,7 +116,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
   
   HVM_RET = f->count;
 
-out:
+//out:
   if (key_miss) {
     add_flow(&key, f);
   }
