@@ -37,10 +37,10 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    hike_pass.bpf.c \
 	    hike_drop.bpf.c \
 	    lse.bpf.c \
-            ip6_srcdst_tb_mon.bpf.c \
+        ip6_srcdst_tb_mon.bpf.c \
 	    ip6_src_tb_mon.bpf.c \
 	    ip6_dst_tb_mon.bpf.c \
-	    ip6_dstsrc_mtr_basic.bpf.c \
+	    ip6_srcdst_mtr_basic.bpf.c \
 	    ip6_src_mtr_basic.bpf.c \
 	    ip6_dst_mtr_basic.bpf.c
 
