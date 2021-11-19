@@ -59,23 +59,30 @@ enum {
 
 #define HIKE_EBPF_PROG_LSE		30 /* 0x1e */
 
-/* HIKe Chain IDs (ID must be > 64 (0x40)) */
+/* Chain IDs
+ * Each chain ID must have the 30-th bit (counting from 0) SET to 1.
+ */
+#define HIKE_CHAIN_FOO_ID		1073741900 /* 0x4000004c */
+#define HIKE_CHAIN_BAR_ID		1073741901 /* 0x4000004d */
+#define HIKE_CHAIN_BAZ_ID		1073741902 /* 0x4000004e */
 
-#define HIKE_CHAIN_FOO_ID		76 /* 0x4c */
-#define HIKE_CHAIN_BAR_ID		77 /* 0x4d */
-#define HIKE_CHAIN_BAZ_ID		78 /* 0x4e */
+#define HIKE_CHAIN_QUX_ID		1073741903 /* 0x4000004f */
+#define HIKE_CHAIN_MON_ALLOW		1073741904 /* 0x40000050 */
+#define HIKE_CHAIN_MON_DROP		1073741905 /* 0x40000051 */
 
-#define HIKE_CHAIN_QUX_ID		79 /* 0x4f */
-#define HIKE_CHAIN_MON_ALLOW		80 /* 0x50 */
-#define HIKE_CHAIN_MON_DROP		81 /* 0x51 */
+#define HIKE_CHAIN_TLCL_TEST_ID		1073741906 /* 0x40000052 */
 
-#define HIKE_CHAIN_TLCL_TEST_ID		82 /* 0x52 */
+#define HIKE_CHAIN_DDOS_MMFDW_ID	1073741907 /* 0x40000053 */
+#define HIKE_CHAIN_DDOS_3STAGES_ID	1073741908 /* 0x40000054 */
+#define HIKE_CHAIN_DDOS_2STAGES_ID	1073741909 /* 0x40000055 */
 
-#define HIKE_CHAIN_DDOS_MMFDW_ID	83 /* 0x53 */
-#define HIKE_CHAIN_DDOS_3STAGES_ID	84 /* 0x54 */
-#define HIKE_CHAIN_DDOS_2STAGES_ID	85 /* 0x55 */
-
-#define HIKE_CHAIN_DDOS_FULL_ID		86 /* 0x56 */
+/* (1 << 30) is the Chain ID FLAG used to discriminate a Chain ID from an HIKe
+ * eBPF Program.
+ * you can assign a Chain ID as follow:
+ *
+ * 0x40000000 | ChainID
+ */
+#define HIKE_CHAIN_DDOS_FULL_ID		1073741910 /* 0x40000056 */
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
