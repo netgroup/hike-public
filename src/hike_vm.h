@@ -146,6 +146,7 @@ typedef __u8	bool;
  * +--------------+-----------------+------------+------------+---------------+
  *
  *
+ *  XXX: !!! DEPRECATED !!! not used anymore
  *  extended instruction only for JUMP_TAIL_CALL to HIKe program/chain
  *
  * MSB									    LSB
@@ -554,7 +555,7 @@ enum hike_xdp_action {
  * Such "banks" are accessed through virtual addresses which have to be
  * always translated by the simple HIKe VM MMU.
  *
- * Each memory "bank" can address up to 2^16 bytes.
+ * Each memory "bank" can address up to 2^24 bytes.
  * The total number of possibly banks is 2^8.
  *
  * Therefore, a virtual HIKe Memmory address is defined as follows:
