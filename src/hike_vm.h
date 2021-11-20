@@ -14,6 +14,11 @@
 #include "hike_vm_common.h"
 #include "map.h"
 
+/* TODO: move in hike_vm_common.h ? */
+typedef __u8	bool;
+#define true	((__u8)1)
+#define false	((__u8)0)
+
 #ifndef bpf_printk
 #define bpf_printk(fmt, ...)						\
 ({									\
@@ -82,44 +87,20 @@ do {								\
 /* jmp table for hosting all the HIKe programs */
 bpf_map(hvm_hprog_map, PROG_ARRAY, __u32, __u32, GEN_PROG_TABLE_SIZE);
 
-/* New ID specs:
- * an elem_ID (uprog ID/chain ID) is structured as follows:
- *
- *	k2 k1 k0 m5 m4 m3 m2 m1 m0
- *
- *  - A valid UPROG ID MUST set to 0 every k_j bits j in [0..2].
- *    Therefore, we can have a total of 2^6 possibile UPROG IDs, i.e.:
- *
- *		b000 000110 = 0x06 is a valid UPROG ID;
- *		b011 000110 = 0x36 is NOT a valid UPROG ID;
- *
- *  - A valid CHAIN ID MUST set at least one of the k2 k1 k0 bits to 1.
- *    No restrictions for m5, m4, ..., m0 for a CHAIN ID.
- *
- *	b001 001010 = 0x4a is a valid CHAIN ID;
- *	b000 001010 = 0x0a is NOT a valid CHAIN ID.
- */
-#define UPROG_MASK_BITS		6
-#define CHAIN_MASK_BITS		9
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-/* XXX: note those values depend on the UPROG_MASK_BITS and CHAIN_MASK_BITS */
-#define CHAIN_DEFAULT_ID	0x7defc1c0
 
-typedef __u8	bool;
-#define true	((__u8)1)
-#define false	((__u8)0)
 
 #ifndef BIT
-#define BIT(x)							\
-	((__u32)(((__u32)1) << ((__u32)(x))))
+#define BIT(nr)		(UL(1) << (nr))
 #endif
 
-/* XXX: for better performance these masks should be PRECOMPILED ... */
-#define ELEM_ID_GEN_MASK_U32(__nbits)				\
-		((__u32)(BIT(__nbits) - ((__u32)1)))
+/* XXX: note those values depend on the UPROG_MASK_BITS and CHAIN_MASK_BITS */
+#define CHAIN_DEFAULT_ID	0xcafef00d
 
-#define UPROG_MASK	ELEM_ID_GEN_MASK_U32(UPROG_MASK_BITS)
-#define CHAIN_MASK	ELEM_ID_GEN_MASK_U32(CHAIN_MASK_BITS)
+/* a chain id must have this bit set */
+#define HIKE_VM_CHAIN_BIT_IDX	30
+#define HIKE_VM_CHAIN_FLAG	BIT(HIKE_VM_CHAIN_BIT_IDX)
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
@@ -146,6 +127,7 @@ typedef __u8	bool;
  * +--------------+-----------------+------------+------------+---------------+
  *
  *
+ *  XXX: !!! DEPRECATED !!! not used anymore
  *  extended instruction only for JUMP_TAIL_CALL to HIKe program/chain
  *
  * MSB									    LSB
@@ -492,7 +474,7 @@ struct hike_chain_regmem {
 #define HIKE_CHAIN_NINSN_MAX			32
 
 struct hike_chain {
-	__s32 chain_id;
+	__u32 chain_id;
 	__u16 ninsn;
 	__u16 upc;
 
@@ -554,7 +536,7 @@ enum hike_xdp_action {
  * Such "banks" are accessed through virtual addresses which have to be
  * always translated by the simple HIKe VM MMU.
  *
- * Each memory "bank" can address up to 2^16 bytes.
+ * Each memory "bank" can address up to 2^24 bytes.
  * The total number of possibly banks is 2^8.
  *
  * Therefore, a virtual HIKe Memmory address is defined as follows:
@@ -725,7 +707,7 @@ bpf_map(hvm_shmem_map, PERCPU_ARRAY, __u32, struct hike_shared_mem_data,
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 static __always_inline int
-__hike_chain_store_reg(struct hike_chain *cur_chain, __s32 index,
+__hike_chain_store_reg(struct hike_chain *cur_chain, __u32 index,
 		       const __u64 *val)
 {
 	barrier();
@@ -739,7 +721,7 @@ __hike_chain_store_reg(struct hike_chain *cur_chain, __s32 index,
 }
 
 static __always_inline int
-__hike_chain_load_reg(struct hike_chain *cur_chain, __s32 index,
+__hike_chain_load_reg(struct hike_chain *cur_chain, __u32 index,
 		      __u64 *const val)
 {
 	barrier();
@@ -753,7 +735,7 @@ __hike_chain_load_reg(struct hike_chain *cur_chain, __s32 index,
 }
 
 static __always_inline int
-__hike_chain_ref_reg(struct hike_chain *cur_chain, __s32 index, __u64 ** reg)
+__hike_chain_ref_reg(struct hike_chain *cur_chain, __u32 index, __u64 ** reg)
 {
 	barrier();
 	if (index > HIKE_REG_MAX)
@@ -765,11 +747,11 @@ __hike_chain_ref_reg(struct hike_chain *cur_chain, __s32 index, __u64 ** reg)
 	return 0;
 }
 
-static __always_inline struct hike_chain *hike_chain_lookup(const __s32 *id)
+static __always_inline struct hike_chain *hike_chain_lookup(const __u32 *id)
 {
 	struct hike_chain *hc;
 
-	if (unlikely(*id < 0 || *id >= HIKE_CHAIN_MAP_NELEM_MAX))
+	if (unlikely(!id))
 		return NULL;
 
 	hc = bpf_map_lookup_elem(&hvm_chain_map, id);
@@ -948,22 +930,14 @@ static __always_inline int __hike_push_chain(struct hike_chain_data *chain_data,
 	return 0;
 }
 
-static __always_inline bool hike_is_valid_elem_id(__s32 elem_id)
+static __always_inline bool __hike_is_chain(__u32 chain_id)
 {
-	return elem_id >= 0;
+	return !!(chain_id & HIKE_VM_CHAIN_FLAG);
 }
 
-static __always_inline bool hike_is_valid_prog_id(__s32 uprog_id)
+static __always_inline bool __hike_is_prog(__u32 prog_id)
 {
-	if (!hike_is_valid_elem_id(uprog_id))
-		return false;
-
-	return !(((__u32)uprog_id) & (CHAIN_MASK & ~UPROG_MASK));
-}
-
-static __always_inline bool hike_is_valid_chain_id(__s32 chain_id)
-{
-	return !hike_is_valid_prog_id(chain_id);
+	return !__hike_is_chain(prog_id);
 }
 
 static __always_inline
@@ -975,7 +949,7 @@ int __hike_chain_push_by_id(struct hike_chain_data *chain_data, __u32 chain_id,
 	DEBUG_PRINT("HIKe VM debug: chain call for chain ID=0x%x, nargs=%d",
 		    chain_id, nargs);
 
-	new_chain = hike_chain_lookup((const __s32 *)&chain_id);
+	new_chain = hike_chain_lookup(&chain_id);
 	if (unlikely(!new_chain))
 		return -ENOBUFS;
 
@@ -1045,7 +1019,7 @@ hike_insn *__hike_chain_cur_hike_insn(struct hike_chain *hc)
 }
 
 static __always_inline int
-__hike_chain_call_chain(struct hike_chain_data *chain_data, __s32 chain_id,
+__hike_chain_call_chain(struct hike_chain_data *chain_data, __u32 chain_id,
 			__u8 nargs)
 {
 	return __hike_chain_push_by_id(chain_data, chain_id, nargs);
@@ -1489,7 +1463,7 @@ int __hike_elem_call_insn(struct hike_chain_data *chain_data,
 		/* elem_id is ALWAYS 32 bits long */
 		elem_id = __to_u32(reg_val);
 
-		if (hike_is_valid_prog_id(elem_id)) {
+		if (__hike_is_prog(elem_id)) {
 			/* tail call is deferred, so let's set the argument of
 			 * the HIKE tail call here.
 			 *
@@ -1507,7 +1481,7 @@ int __hike_elem_call_insn(struct hike_chain_data *chain_data,
 			return -EINPROGRESS;
 		}
 
-		if (hike_is_valid_chain_id(elem_id)) {
+		if (__hike_is_chain(elem_id)) {
 			rc = __hike_chain_call_chain(chain_data, elem_id,
 						     nargs);
 			if (unlikely(rc < 0))
@@ -1516,7 +1490,7 @@ int __hike_elem_call_insn(struct hike_chain_data *chain_data,
 			return 0;
 		}
 
-		DEBUG_PRINT("HIKe VM debug: invalid hike_elem_call* nargs");
+		DEBUG_PRINT("HIKe VM debug: invalid hike_elem_call* argument");
 		return -EINVAL;
 
 	default:
@@ -1970,7 +1944,7 @@ __hike_chain_boostrap_install(struct hike_chain_data *chain_data)
 }
 
 static __always_inline int
-hike_chain_boostrap(struct xdp_md *ctx, __s32 chain_id)
+hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 {
 	struct hike_chain_data *chain_data;
 	struct hike_chain *cur_chain;

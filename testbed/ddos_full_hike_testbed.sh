@@ -262,7 +262,7 @@ read -r -d '' sut_env <<-EOF
 	bpftool map update \
 		pinned /sys/fs/bpf/maps/init/ipv6_simple_classifier_map \
 		key hex		00 00 00 00				\
-		value hex 	56 00 00 00
+		value hex 	56 00 00 40
 
 	# Program the IPv6 <src,dst> hashset
 	# bpftool map update \
