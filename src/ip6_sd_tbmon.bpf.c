@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
 /* HIKe Prog Name comes always first */
-#define HIKE_PROG_NAME    ip6_srcdst_tb_mon
+#define HIKE_PROG_NAME    ip6_sd_tbmon
 
 #define REAL
 //#define REPL
