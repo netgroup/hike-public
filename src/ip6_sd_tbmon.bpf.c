@@ -36,7 +36,7 @@
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define MAP_NAME_1 pcpu_srcdst_tb_mon
+#define MAP_NAME_1 pcpu_sd_tbmon
 
 bpf_map(MAP_NAME_1,
 	LRU_PERCPU_HASH,
@@ -175,7 +175,7 @@ out:
   }
 	return HIKE_XDP_VM;
 drop:
-  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet");
+  DEBUG_PRINT("drop packet");
 	return HIKE_XDP_ABORTED;
 
   return 0;
