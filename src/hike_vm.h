@@ -89,13 +89,14 @@ bpf_map(hvm_hprog_map, PROG_ARRAY, __u32, __u32, GEN_PROG_TABLE_SIZE);
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-
-
 #ifndef BIT
 #define BIT(nr)		(UL(1) << (nr))
 #endif
 
-/* XXX: note those values depend on the UPROG_MASK_BITS and CHAIN_MASK_BITS */
+/* Default Chain ID (aka bootstrap Chain ID)
+ * This Chain ID is very particular: indeed, the 31-th bit is set to 1 rather
+ * than 0 as it should be for every valid Chain's ID.
+ */
 #define CHAIN_DEFAULT_ID	0xcafef00d
 
 /* a chain id must have this bit set */
@@ -360,6 +361,9 @@ enum {
 #define HIKE_RAW_CALL_INSN(IMM)						\
 	HIKE_RAW_INSN(HIKE_JMP64 | HIKE_OP(HIKE_CALL),			\
 		      0, 0, 0, IMM)
+
+#define HIKE_CALL_ELEM_NARGS_1_INSN()					\
+	HIKE_RAW_CALL_INSN(HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_1_ID))
 
 #define HIKE_CALL_ELEM_NARGS_2_INSN()					\
 	HIKE_RAW_CALL_INSN(HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_2_ID))
@@ -1929,15 +1933,16 @@ __hike_chain_boostrap_install(struct hike_chain_data *chain_data)
 	 */
 	ACCESS_HIKE_CHAIN_REG(boot_chain, 0) = 0;
 
+	/* poison the REG_1 register */
 	ACCESS_HIKE_CHAIN_REG(boot_chain, 1) = (__u32)0xf0f0f0f0;
-	ACCESS_HIKE_CHAIN_REG(boot_chain, 2) = 0;
 
+	/* initialize the stack pointer */
 	ACCESS_HIKE_CHAIN_REG(boot_chain, fp) = HIKE_MEM_CHAIN_STACK_DATA_END;
 
 	/* chain loader instruction; REG_1 will be loaded with the ID of the
 	 * chain id chosen in the bootstrap phase.
 	 */
-	boot_chain->insns[0] = HIKE_CALL_ELEM_NARGS_2_INSN();
+	boot_chain->insns[0] = HIKE_CALL_ELEM_NARGS_1_INSN();
 	boot_chain->insns[1] = HIKE_EXIT_INSN();
 
 	return 0;
@@ -1948,7 +1953,6 @@ hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 {
 	struct hike_chain_data *chain_data;
 	struct hike_chain *cur_chain;
-	struct hike_insn *insn;
 	int rc;
 
 	rc = hike_shared_mem_init();
@@ -1966,11 +1970,6 @@ hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 	cur_chain = __hike_get_active_chain(chain_data);
 	if (unlikely(!cur_chain))
 		return -ENOBUFS;
-
-	/* retrieve the first instruction of the loading chain */
-	insn = __hike_chain_hike_insn_at(cur_chain, 0);
-	if (unlikely(!insn))
-		return -EFAULT;
 
 	/* set the chain ID in register REG_1; that allows the HIKE VM to
 	 * jump into the given chain.
