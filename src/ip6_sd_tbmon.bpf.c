@@ -127,7 +127,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
   //get_tokens_from_pkt(ctx, cur, &required_tokens);
 
   f = get_flow(&key);
-  if (f == NULL) {
+  if (f == NULL | f->rate == 0) {
     f = &my_flow;
     key_miss = 1;
     set_flow (f, RATE, BUCKET_SIZE, BASE_TIME_BITS, SHIFT_TOKENS);
@@ -157,6 +157,8 @@ HIKE_PROG(HIKE_PROG_NAME) {
       }
     }
   }
+  //DEBUG_PRINT("REQUIRED %llu",required_tokens);
+  //DEBUG_PRINT("NEW %llu",new_tokens);
   
   if(required_tokens>new_tokens){
     f->last_tokens=new_tokens;

@@ -9,14 +9,14 @@
 #include <linux/errno.h>
 
 /* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
-#include "minimal.h"
+//#include "minimal.h"
 
 #include "hike_vm.h"
 #include "parse_helpers.h"
 
 #include "ip6_hset.h"
 
-#define HIKE_PCPU_LSE_MAX	4096
+#define HIKE_PCPU_LSE_MAX 4096
 
 bpf_map(map_pcpu_lse,
 	LRU_PERCPU_HASH,

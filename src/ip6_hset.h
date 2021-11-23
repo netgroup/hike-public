@@ -16,7 +16,7 @@
 
 /* FIXME: make this value adjustable */
 // expiration timer for the blacklist
-#define HIKE_IPV6_HSET_EXP_TIMEOUT_NS 	60000000000ul /* 60 secs */
+#define HIKE_IPV6_HSET_EXP_TIMEOUT_NS 	10000000000ul /* 0 secs */
 
 #define	IPV6_HSET_ACTION_LOOKUP			      0
 #define	IPV6_HSET_ACTION_ADD			        1

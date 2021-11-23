@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
 /* HIKe Prog Name comes always first */
-#define HIKE_PROG_NAME    ip6_srcdst_mtr_basic
+#define HIKE_PROG_NAME    ip6_sd_meter
 
 #define REAL
 //#define REPL
@@ -33,7 +33,7 @@
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define MAP_NAME_1 pcpu_mtr_base
+#define MAP_NAME_1 pcpu_meter
 
 bpf_map(MAP_NAME_1,
 	LRU_PERCPU_HASH,
@@ -106,7 +106,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
   //get_tokens_from_pkt(ctx, cur, &required_tokens);
 
   f = get_flow(&key);
-  if (f == NULL) {
+  if (f == NULL | f->count == 0) {
     f = &my_flow;
     key_miss = 1;
     set_flow (f, 1);

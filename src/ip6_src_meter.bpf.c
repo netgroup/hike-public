@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
 /* HIKe Prog Name comes always first */
-#define HIKE_PROG_NAME    ip6_dst_mtr_basic
+#define HIKE_PROG_NAME    ip6_src_meter
 
 #define REAL
 //#define REPL
@@ -33,11 +33,11 @@
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define MAP_NAME_1  pcpu_dst_mtr_basic
+#define MAP_NAME_1 pcpu_src_mtr_basic
 
 bpf_map(MAP_NAME_1,
 	LRU_PERCPU_HASH,
-	struct ipv6_hset_dst_key,
+	struct ipv6_hset_src_key,
 	struct flow_meter_basic,
 	HIKE_PCPU_LSE_MAX);
 
@@ -83,7 +83,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   struct flow_meter_basic * f;
 
-  FLOW_KEY_TYPE_DST key;
+  FLOW_KEY_TYPE_SRC key;
   struct flow_meter_basic my_flow;
 
   struct pkt_info *info = hike_pcpu_shmem();
@@ -98,7 +98,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 	if (unlikely(!cur))
 		goto drop;
 
-  ret_code = ipv6_hset_dst_get_key(ctx, cur, &key);
+  ret_code = ipv6_hset_src_get_key(ctx, cur, &key);
   if (ret_code !=0) {
     goto drop;
   }
@@ -123,7 +123,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 	return HIKE_XDP_VM;
 drop:
 
-DEBUG_HKPRG_PRINT("drop packet");
+  DEBUG_HKPRG_PRINT("drop packet");
 	return HIKE_XDP_ABORTED;
   
   return 0;

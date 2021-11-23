@@ -37,12 +37,12 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    hike_pass.bpf.c \
 	    hike_drop.bpf.c \
 	    lse.bpf.c \
-        ip6_srcdst_tb_mon.bpf.c \
+        ip6_sd_tb_mon.bpf.c \
 	    ip6_src_tb_mon.bpf.c \
 	    ip6_dst_tb_mon.bpf.c \
-	    ip6_srcdst_mtr_basic.bpf.c \
-	    ip6_src_mtr_basic.bpf.c \
-	    ip6_dst_mtr_basic.bpf.c
+	    ip6_src_meter.bpf.c \
+	    ip6_src_meter.bpf.c \
+	    ip6_dst_meter.bpf.c
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c
