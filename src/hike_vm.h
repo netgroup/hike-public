@@ -1875,43 +1875,45 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
  */
 #define __hike_chain_do_exec(ctx, chain_data)				\
 ({									\
-	struct hike_chain_done_insn_bottom res = { 0, };		\
-	int i, rc = -ELOOP;						\
+	struct hike_chain_done_insn_bottom __res = { 0, };		\
+	int __i, __rc = -ELOOP;						\
 									\
-	for (i = 0; i < HIKE_CHAIN_EXEC_NINSN_MAX; ++i) {		\
-		rc = __hike_chain_do_exec_one_insn_top(ctx, chain_data,	\
-						       &res);		\
-		if (rc < 0)						\
+	for (__i = 0; __i < HIKE_CHAIN_EXEC_NINSN_MAX; ++__i) {		\
+		__rc = __hike_chain_do_exec_one_insn_top(ctx,		\
+							 chain_data,	\
+							 &__res);	\
+		if (__rc < 0)						\
 			break;						\
 	}								\
 									\
-	if (rc == -EINPROGRESS)	{					\
-		switch (res.opcode) {					\
+	if (__rc == -EINPROGRESS) {					\
+		switch (__res.opcode) {					\
 		case HIKE_JMP64 | HIKE_CALL:				\
-			bpf_tail_call(ctx, &hvm_hprog_map, res.prog_id);\
+			bpf_tail_call(ctx, &hvm_hprog_map,		\
+				      __res.prog_id);			\
 			/* fallback */					\
-			rc = -ENOENT;					\
+			__rc = -ENOENT;					\
 			break;						\
 		default:						\
-			rc = -EFAULT;					\
+			__rc = -EFAULT;					\
 			break;						\
 		}							\
 	}								\
 									\
-	rc;								\
+	__rc;								\
 })
 
 #define hike_chain_next(ctx)						\
 ({									\
-	struct hike_chain_data *chain_data = get_hike_chain_data();	\
-	int rc;								\
+	struct hike_chain_data *__chain_data = get_hike_chain_data();	\
+	int __rc;							\
 									\
-	if (unlikely(!chain_data))					\
-		rc = -ENOENT;						\
+	if (unlikely(!__chain_data))					\
+		__rc = -ENOENT;						\
 	else								\
-		rc = __hike_chain_do_exec(ctx, chain_data);		\
+		__rc = __hike_chain_do_exec(ctx, __chain_data);		\
 									\
-	rc;								\
+	__rc;								\
 })
 
 static __always_inline int
