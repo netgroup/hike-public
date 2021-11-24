@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
 /* HIKe Prog Name comes always first */
-#define HIKE_PROG_NAME   ip6_dst_tb_mon 
+#define HIKE_PROG_NAME    ip6_src_tbmon
 
 #define REAL
 //#define REPL
@@ -20,7 +20,6 @@
   #include "hike_vm.h"
   #include "parse_helpers.h"
   #include "ip6_hset.h"
-  
 #endif  
 
 #ifdef REPL
@@ -31,16 +30,15 @@
 
   extern U64 REQUIRED_TOKENS;
   extern U64 INJECTED_DELTA;
-
 #endif
 
 #define HIKE_PCPU_LSE_MAX	4096
 
-#define MAP_NAME_1 pcpu_tb_dst
+#define MAP_NAME_1 pcpu_tb_src
 
 bpf_map(MAP_NAME_1,
 	LRU_PERCPU_HASH,
-	struct ipv6_hset_dst_key,
+	struct ipv6_hset_src_key,
 	struct flow,
 	HIKE_PCPU_LSE_MAX);
 
@@ -59,7 +57,6 @@ bpf_map(MAP_NAME_1,
   #define add_flow(key, flow) \
   bpf_map_update_elem_tb(&MAP_NAME_1, key, flow, BPF_ANY)
 #endif  
-
 
 static __always_inline struct flow * set_flow (struct flow * f, 
   U64 in_rate,
@@ -97,13 +94,11 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   struct flow * f;
 
-  FLOW_KEY_TYPE_DST key;
+  FLOW_KEY_TYPE_SRC key;
   struct flow my_flow;
 
   struct pkt_info *info = hike_pcpu_shmem();
   struct hdr_cursor *cur;
-
-  DEBUG_PRINT("Hi there!");
 
 	/* take the reference to the cursor object which has been saved into
 	 * the HIKe per-cpu shared memory
@@ -114,7 +109,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
 
   current_time = GET_TIME;
 
-  ret_code = ipv6_hset_dst_get_key(ctx, cur, &key);
+  ret_code = ipv6_hset_src_get_key(ctx, cur, &key);
   if (ret_code !=0) {
     goto drop;
   }
@@ -127,7 +122,7 @@ HIKE_PROG(HIKE_PROG_NAME) {
   //get_tokens_from_pkt(ctx, cur, &required_tokens);
 
   f = get_flow(&key);
-  if (f == NULL) {
+  if (f == NULL | f->rate == 0) {
     f = &my_flow;
     key_miss = 1;
     set_flow (f, RATE, BUCKET_SIZE, BASE_TIME_BITS, SHIFT_TOKENS);
@@ -175,7 +170,8 @@ out:
   }
 	return HIKE_XDP_VM;
 drop:
-  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet");
+
+  DEBUG_HKPRG_PRINT("drop packet");
 	return HIKE_XDP_ABORTED;
 
   return 0;
