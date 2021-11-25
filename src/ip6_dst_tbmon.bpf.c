@@ -175,7 +175,7 @@ out:
   }
 	return HIKE_XDP_VM;
 drop:
-  DEBUG_PRINT(MYEXP(HIKE_PROG_NAME)" : drop packet");
+  DEBUG_HKPRG_PRINT(" : drop packet");
 	return HIKE_XDP_ABORTED;
 
   return 0;

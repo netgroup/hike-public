@@ -61,7 +61,7 @@ typedef __u8	bool;
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 #ifndef HIKE_DEBUG
-#define HIKE_DEBUG 0
+#define HIKE_DEBUG 1
 #endif
 
 #if HIKE_DEBUG == 1
