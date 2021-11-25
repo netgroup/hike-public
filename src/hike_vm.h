@@ -1650,12 +1650,12 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 	} break;
 
-	/* STX unstructions, i.e.: (*type)(dst_reg + off) = imm32 */
+	/* STX instructions, i.e.: (*type)(dst_reg + off) = imm32 */
 	case HIKE_ST | HIKE_MEM | HIKE_DW:
 	case HIKE_ST | HIKE_MEM | HIKE_W:
 	case HIKE_ST | HIKE_MEM | HIKE_H:
 	case HIKE_ST | HIKE_MEM | HIKE_B:
-	/* STX unstructions, i.e.: (*type)(dst_reg + off) = src_reg */
+	/* STX instructions, i.e.: (*type)(dst_reg + off) = src_reg */
 	case HIKE_STX | HIKE_MEM | HIKE_DW:
 	case HIKE_STX | HIKE_MEM | HIKE_W:
 	case HIKE_STX | HIKE_MEM | HIKE_H:
