@@ -1425,6 +1425,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 		case HIKE_MEM_BID_PCPU_SHARED:				\
 			__rc = __hike_pcpu_shared_memory_write(		\
 					(REF), __vinfo, __size);	\
+			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_ZERO:					\
 		case HIKE_MEM_BID_PRIVATE:				\
 		default:						\
