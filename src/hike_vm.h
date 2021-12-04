@@ -814,18 +814,62 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 	struct hike_insn *dst_insns = &dst->insns[0];
 	const union __u *s = (void *)src_insns;
 	union __u *d = (void *)dst_insns;
+	__u16 ninsn;
+	int i;
 
 	/* copy the head of chain */
 	dst->chain_id = src->chain_id;
-	dst->ninsn = src->ninsn;
-	/* TODO: make a smart copy which copies only non-zero instructions */
+	ninsn = dst->ninsn = src->ninsn;
+
+	/* XXX: should be always zero */
 	dst->upc = src->upc;
 
 	/* memcpy is not very efficient here; it emits 8-bit move instructions
 	 * rather than 64-bit ones. This trick forces the struct copy using
 	 * 64-bit moves.
 	 */
-	*d = *s;
+#define __COPY_INST(n)						\
+	case n:							\
+		for (i = 0; i < n; ++i)				\
+			d->raw_insns[i] = s->raw_insns[i];	\
+		break
+
+	/* we unroll the copy of the hike chain at multiple of 4 instructions
+	 * per time. If the number of instructions is less than k*4 then we
+	 * copy garbage but this is not an issue at all.
+	 */
+	switch (ninsn) {
+	case 13:
+	case 14:
+	case 15:
+	__COPY_INST(16);
+
+	case 9:
+	case 10:
+	case 11:
+	__COPY_INST(12);
+
+	case 5:
+	case 6:
+	case 7:
+	__COPY_INST(8);
+
+	case 1:
+	case 2:
+	case 3:
+	__COPY_INST(4);
+
+	case 0:
+		break;
+	default:
+		/*if the number of instructions is greater than 16, do the
+		 * whole copy.  We can adjust this value to sqeeuze more
+		 * performance if needed.
+		 */
+		*d = *s;
+		break;
+	}
+#undef _COPY_INST
 }
 
 static __always_inline int
