@@ -1600,15 +1600,8 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		imm32 = insn->imm;
 
 		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
-		if (rc < 0)
+		if (unlikely(rc < 0))
 			return rc;
-
-		/* LD64 is split in two instructions; fetch the second one
-		 * righ here.
-		 */
-		insn = __hike_chain_cur_hike_insn(cur_chain);
-		if (!insn)
-			return -EFAULT;
 
 		__hike_chain_upc_inc(cur_chain);
 
