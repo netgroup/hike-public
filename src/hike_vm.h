@@ -714,73 +714,68 @@ static __always_inline int
 __hike_chain_store_reg(struct hike_chain *cur_chain, __u32 index,
 		       const __u64 *val)
 {
-	barrier();
-	if (index > HIKE_REG_MAX)
-		return -EINVAL;
+	int rc = -EINVAL;
 
-	__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index) = *val;
+	if (unlikely(index <= HIKE_REG_MAX)) {
+		__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index) = *val;
+		rc = 0;
+	}
+
 	barrier();
 
-	return 0;
+	return rc;
 }
 
 static __always_inline int
 __hike_chain_load_reg(struct hike_chain *cur_chain, __u32 index,
 		      __u64 *const val)
 {
-	barrier();
-	if (index > HIKE_REG_MAX)
-		return -EINVAL;
+	int rc = -EINVAL;
 
-	*val = __UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+	if (unlikely(index <= HIKE_REG_MAX)) {
+		*val = __UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+		rc = 0;
+	}
+
 	barrier();
 
-	return 0;
+	return rc;
 }
 
 static __always_inline int
 __hike_chain_ref_reg(struct hike_chain *cur_chain, __u32 index, __u64 ** reg)
 {
-	barrier();
-	if (index > HIKE_REG_MAX)
-		return -EINVAL;
+	int rc = -EINVAL;
 
-	*reg = &__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+	if (unlikely(index <= HIKE_REG_MAX)) {
+		*reg = &__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+		rc = 0;
+	}
+
 	barrier();
 
-	return 0;
+	return rc;
 }
 
 static __always_inline struct hike_chain *hike_chain_lookup(const __u32 *id)
 {
-	struct hike_chain *hc;
-
 	if (unlikely(!id))
 		return NULL;
 
-	hc = bpf_map_lookup_elem(&hvm_chain_map, id);
-	if (unlikely(!hc))
-		return NULL;
-
-	return hc;
+	return bpf_map_lookup_elem(&hvm_chain_map, id);
 }
 
 static __always_inline struct hike_chain_data *get_hike_chain_data()
 {
-	struct hike_chain_data *hcd;
 	const __u32 id = 0;
 
-	hcd = bpf_map_lookup_elem(&hvm_cdata_map, &id);
-	if (unlikely(!hcd))
-		return NULL;
-
-	return hcd;
+	return bpf_map_lookup_elem(&hvm_cdata_map, &id);
 }
 
 static __always_inline struct hike_chain
 *__hike_get_active_chain(struct hike_chain_data *chain_data)
 {
-	struct hike_chain *active_chain;
+	struct hike_chain *active_chain = NULL;
 	__u16 ac_index;
 
 	/* optimizer does its own wizardry here... let's do in this way to
@@ -790,13 +785,11 @@ static __always_inline struct hike_chain
 
 	ac_index = chain_data->active_chain;
 	if (unlikely(ac_index >= HIKE_CHAIN_STACK_DEPTH_MAX))
-		return NULL;
+		goto out;
 
 	active_chain = &chain_data->chains[ac_index &
 					   (HIKE_CHAIN_STACK_DEPTH_MAX - 1)];
-	if (unlikely(!active_chain))
-		return NULL;
-
+out:
 	barrier();
 
 	return active_chain;
@@ -878,9 +871,7 @@ __hike_chain_upc_add(struct hike_chain *chain, __s16 off)
 	__u16 upc = chain->upc + off;
 	__u16 ninsn = chain->ninsn;
 
-	if (upc > HIKE_CHAIN_NINSN_MAX)
-		return -ENOBUFS;
-	if (upc > ninsn)
+	if (upc > HIKE_CHAIN_NINSN_MAX || upc > ninsn)
 		return -ENOBUFS;
 
 	chain->upc = upc;
