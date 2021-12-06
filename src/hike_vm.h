@@ -1039,16 +1039,10 @@ static __always_inline int __hike_pop_chain(struct hike_chain_data *chain_data)
 static __always_inline struct
 hike_insn *__hike_chain_hike_insn_at(struct hike_chain *hc, __u16 upc)
 {
-	struct hike_insn *insn;
-
 	if (unlikely(upc >= hc->ninsn || upc >= HIKE_CHAIN_NINSN_MAX))
 		return NULL;
 
-	insn = &hc->insns[upc & (HIKE_CHAIN_NINSN_MAX - 1)];
-	if (!insn)
-		return NULL;
-
-	return insn;
+	return &hc->insns[upc & (HIKE_CHAIN_NINSN_MAX - 1)];
 }
 
 static __always_inline struct
@@ -1546,7 +1540,7 @@ static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
-	struct hike_insn __insn, *_insn, *insn;
+	struct hike_insn __insn, *insn;
 	struct hike_chain *cur_chain;
 	__u64 *reg_ref;
 	__u64 reg_val;
@@ -1563,15 +1557,15 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
-	_insn = __hike_chain_cur_hike_insn(cur_chain);
-	if (unlikely(!_insn))
+	insn = __hike_chain_cur_hike_insn(cur_chain);
+	if (unlikely(!insn))
 		return -EFAULT;
 
 	/* let's copy locally the _insn and then take back the reference to
 	 * the insn which is in this case stored on the stack. This is a trick
 	 * fo the optimizer...
 	 */
-	__insn = *_insn;
+	__insn = *insn;
 	insn = &__insn;
 
 	opcode = insn->hic_code;
