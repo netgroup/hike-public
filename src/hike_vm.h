@@ -809,16 +809,26 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 	const struct hike_insn *src_insns = &src->insns[0];
 	struct hike_insn *dst_insns = &dst->insns[0];
 	const union __u *s = (void *)src_insns;
+	__u32 src_chain_id = src->chain_id;
 	union __u *d = (void *)dst_insns;
 	__u16 ninsn;
 	int i;
 
-	/* copy the head of chain */
-	dst->chain_id = src->chain_id;
-	ninsn = dst->ninsn = src->ninsn;
-
-	/* XXX: should be always zero */
+	/* XXX: src->up SHOULD BE always zero */
 	dst->upc = src->upc;
+
+	if (dst->chain_id == src_chain_id) {
+		/* the chain that we want to copy is already in the per-cpu
+		 * chain "cache". We do NOT copy the chain again!
+		 */
+		DEBUG_PRINT("HIKe VM debug: HIT per-cpu hike_chain .text cache for Chain ID=0x%x",
+			    src_chain_id);
+		goto out;
+	}
+
+	/* copy the head of chain */
+	dst->chain_id = src_chain_id;
+	ninsn = dst->ninsn = src->ninsn;
 
 #define __COPY_INST(start, end)					\
 	case end:						\
@@ -879,11 +889,12 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 #if __COPY_CHAIN_INSNS_CANARY != HIKE_CHAIN_NINSN_MAX
 #error "HIKe VM compilation error: not enough space for copying the whole chain"
 #endif
-		DEBUG_PRINT("HIKe VM debug: not enough space for copying the whole chain 0x%x",
+		DEBUG_PRINT("HIKe VM debug: not enough space for copying the whole Chain ID=0x%x",
 			     dst->chain_id);
 		return -ENOBUFS;
 	}
 
+out:
 	return 0;
 #undef __COPY_CHAIN_INSNS_CANARY
 #undef __COPY_INST
