@@ -487,8 +487,9 @@ struct hike_chain {
 	/* registers and private memory for an HIKe Microprogram/Chain */
 	struct hike_chain_regmem regmem;
 
-	/* TODO: This is only TEMPORARY: indeed, the insns should be moved into
-	 * another table/map.
+	/* moving the chain text code outside pcpu memory is slower for a small
+	 * (~32 instructions) chain rather than copy the whole chain and put it
+	 * in pcpu memory.
 	 */
 	struct hike_insn insns[HIKE_CHAIN_NINSN_MAX];
 };
@@ -797,7 +798,7 @@ out:
 	return active_chain;
 }
 
-static __always_inline void
+static __always_inline int
 __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 {
 	union __u {
@@ -819,52 +820,73 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 	/* XXX: should be always zero */
 	dst->upc = src->upc;
 
-	/* memcpy is not very efficient here; it emits 8-bit move instructions
-	 * rather than 64-bit ones. This trick forces the struct copy using
-	 * 64-bit moves.
-	 */
-#define __COPY_INST(n)						\
-	case n:							\
-		for (i = 0; i < n; ++i)				\
+#define __COPY_INST(start, end)					\
+	case end:						\
+		for (i = (start) - 1; i < (end); ++i) {		\
 			d->raw_insns[i] = s->raw_insns[i];	\
-		break
+		}
+
+#define __COPY_CHAIN_INSNS_CANARY	32
 
 	/* we unroll the copy of the hike chain at multiple of 4 instructions
 	 * per time. If the number of instructions is less than k*4 then we
 	 * copy garbage but this is not an issue at all.
 	 */
 	switch (ninsn) {
+	case 29:
+	case 30:
+	case 31:
+	__COPY_INST(29, 32);
+	/* fallthrough */
+	case 25:
+	case 26:
+	case 27:
+	__COPY_INST(25, 28);
+	/* fallthrough */
+	case 21:
+	case 22:
+	case 23:
+	__COPY_INST(21, 24);
+	/* fallthrough */
+	case 17:
+	case 18:
+	case 19:
+	__COPY_INST(17, 20);
+	/* fallthrough */
 	case 13:
 	case 14:
 	case 15:
-	__COPY_INST(16);
-
+	__COPY_INST(13, 16);
+	/* fallthrough */
 	case 9:
 	case 10:
 	case 11:
-	__COPY_INST(12);
-
+	__COPY_INST(9, 12);
+	/* fallthrough */
 	case 5:
 	case 6:
 	case 7:
-	__COPY_INST(8);
-
+	__COPY_INST(5, 8);
+	/* fallthrough */
 	case 1:
 	case 2:
 	case 3:
-	__COPY_INST(4);
-
+	__COPY_INST(1, 4);
+	/* fallthrough */
 	case 0:
 		break;
 	default:
-		/*if the number of instructions is greater than 16, do the
-		 * whole copy.  We can adjust this value to sqeeuze more
-		 * performance if needed.
-		 */
-		*d = *s;
-		break;
+#if __COPY_CHAIN_INSNS_CANARY != HIKE_CHAIN_NINSN_MAX
+#error "HIKe VM compilation error: not enough space for copying the whole chain"
+#endif
+		DEBUG_PRINT("HIKe VM debug: not enough space for copying the whole chain 0x%x",
+			     dst->chain_id);
+		return -ENOBUFS;
 	}
-#undef _COPY_INST
+
+	return 0;
+#undef __COPY_CHAIN_INSNS_CANARY
+#undef __COPY_INST
 }
 
 static __always_inline int
@@ -942,11 +964,10 @@ static __always_inline int __hike_push_chain(struct hike_chain_data *chain_data,
 	if (unlikely(!active_chain))
 		return -ENOBUFS;
 
-	/* XXX: copy the given chain into the per-cpu chain memory area; maybe
-	 * inefficient but we keep it for the moment.
-	 */
-	__hike_copy_chain((struct hike_chain *const)active_chain,
-			  (const struct hike_chain *)new_chain);
+	rc = __hike_copy_chain((struct hike_chain *const)active_chain,
+			       (const struct hike_chain *)new_chain);
+	if (unlikely(rc < 0))
+		return rc;
 
 	/* make available registers r0, r1-r5 following eBPF calling conv */
 	for (i = 0; i < __HIKE_ELEM_CALL_NARGS_MAX; ++i) {
