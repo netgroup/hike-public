@@ -562,8 +562,13 @@ enum hike_xdp_action {
 
 /* vaddr_info can be encoded within 32 bits */
 struct vaddr_info {
-	__u32 off	:24;		/* little endian LSB */
-	__u32 bank_id	:8;		/* little endian MSB */
+	union {
+		struct {
+			__u32 off	:24;	/* little endian LSB */
+			__u32 bank_id	:8;	/* little endian MSB */
+		};
+		__u32 addr;
+	};
 };
 
 #define HIKE_MEM_BID_ZERO		0x00 /* reserved */
@@ -1376,6 +1381,41 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 	bpf_map_lookup_elem(&hvm_shmem_map, &__off);		\
 })
 
+#define __hike_virt_to_phys(__vaddr, __pptr) 			\
+({								\
+	struct vaddr_info __vinfo = { .addr = __vaddr };	\
+	struct hike_shared_mem_data *__shmem;			\
+	int __rc = -EINVAL;					\
+								\
+	switch (__vinfo.bank_id) {				\
+	case HIKE_MEM_BID_PCPU_SHARED:				\
+		__shmem = hike_pcpu_shmem();			\
+		if (unlikely(!__shmem)) {			\
+			__rc = -EINVAL;				\
+			break;					\
+		}						\
+								\
+		if (unlikely(__vinfo.off + sizeof(**(__pptr)) >	\
+			     HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE)) { \
+			__rc = -ENOBUFS;			\
+			break;					\
+		}						\
+								\
+		*__pptr = (typeof(**(__pptr)) *)		\
+				&__shmem->data[__vinfo.off];	\
+								\
+		__rc = 0;					\
+		break;						\
+								\
+	default:						\
+		/* TODO: should be unsupported operation */	\
+		__rc = -EBADF;					\
+		break;						\
+	}							\
+								\
+	__rc;							\
+})
+
 static __always_inline int hike_shared_mem_init(void)
 {
 	struct hike_shared_mem_data *shmem;
@@ -2145,6 +2185,9 @@ ___hike_const_export__##constname = { 0, }
 
 #define HVM_RET		HVM_ARG0
 
+#define HVM_PTR(__vaddr, __pptr)					\
+	__hike_virt_to_phys((__vaddr), (__pptr))
+
 /* #########################################################################
  * # API to export the binding between an XDP eBPF/HIKe program and its    #
  * # eBPF maps.                                                            #
@@ -2197,6 +2240,7 @@ __attribute__((section(".hike.maps.export")))				\
 /* ############################## User API ################################# */
 /* ######################################################################### */
 
+#define PTR_TO_U64(__ptr) __to_u64((size_t)(__ptr))
 
 #define UAPI_PCPU_SHMEM_ADDR ((void *)((size_t)HIKE_MEM_PCPU_SHARED_ADDR))
 
