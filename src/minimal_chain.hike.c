@@ -379,3 +379,44 @@ out:
 	/* never return from here */
 	return 0;
 }
+
+#define PCPU_MON_INC_REDIRECT()					\
+	hike_elem_call_2(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_REDIRECT)
+
+#define l2red(__oif)	\
+	hike_elem_call_2(HIKE_EBPF_PROG_L2RED, (__oif))
+
+HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_RED_ID)
+{
+	/* FIXME: harcoded for the moment but it can be read from the app_cfg */
+	const __u32 oif = 4;
+	__s64 rc;
+	__u64 ts;
+
+	rc = ipv6_hset_srcdst(IPV6_HSET_ACTION_LOOKUP_AND_CLEAN);
+	if (!rc)
+		goto drop;
+
+	ts = ipv6_flow_meter_srcdst();
+	if (ts < RX_ALLOWED_INTVAL) {
+		/* blacklist the current flow */
+		ipv6_hset_srcdst(IPV6_HSET_ACTION_ADD);
+		goto redirect;
+	}
+
+	PCPU_MON_INC_ALLOW();
+	packet_pass();
+	goto out;
+
+redirect:
+	PCPU_MON_INC_REDIRECT();
+	l2red(oif);
+	goto out;
+drop:
+	PCPU_MON_INC_DROP();
+	packet_drop();
+out:
+	/* never return from here */
+	return 0;
+}

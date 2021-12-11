@@ -19,6 +19,7 @@ enum {
 	HIKE_PCPU_MON_EVENT_ALLOW	= 1,
 	HIKE_PCPU_MON_EVENT_ERROR	= 2,
 	HIKE_PCPU_MON_EVENT_SET_ECN	= 3,
+	HIKE_PCPU_MON_EVENT_REDIRECT	= 4,
 };
 #define HIKE_EBPF_PROG_PCPU_MON		14
 #define HIKE_EBPF_PROG_IPV6_TOS_CLS	15
@@ -59,6 +60,8 @@ enum {
 
 #define HIKE_EBPF_PROG_LSE		30 /* 0x1e */
 
+#define HIKE_EBPF_PROG_L2RED		31 /* 0x1f */
+
 /* Chain IDs
  * Each chain ID must have the 30-th bit (counting from 0) SET to 1.
  */
@@ -83,6 +86,8 @@ enum {
  * 0x40000000 | ChainID
  */
 #define HIKE_CHAIN_DDOS_FULL_ID		1073741910 /* 0x40000056 */
+
+#define HIKE_CHAIN_DDOS_FULL_RED_ID	1073741911 /* 0x40000057 */
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
