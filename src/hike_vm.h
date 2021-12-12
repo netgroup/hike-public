@@ -768,16 +768,12 @@ static __always_inline int
 __hike_chain_store_reg(struct hike_chain *cur_chain, __u32 index,
 		       const __u64 *val)
 {
-	int rc = -EINVAL;
+	if (unlikely(index > HIKE_REG_MAX))
+		return -EINVAL;
 
-	if (unlikely(index <= HIKE_REG_MAX)) {
-		__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index) = *val;
-		rc = 0;
-	}
+	WRITE_ONCE(__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index), *val);
 
-	barrier();
-
-	return rc;
+	return 0;
 }
 
 static __always_inline int
@@ -786,8 +782,9 @@ __hike_chain_load_reg(struct hike_chain *cur_chain, __u32 index,
 {
 	int rc = -EINVAL;
 
-	if (unlikely(index <= HIKE_REG_MAX)) {
-		*val = __UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+	if (likely(index <= HIKE_REG_MAX)) {
+		*val = READ_ONCE(__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain,
+								  index));
 		rc = 0;
 	}
 
@@ -835,17 +832,14 @@ static __always_inline struct hike_chain
 	/* optimizer does its own wizardry here... let's do in this way to
 	 * make the verifier happy...
 	 */
-	barrier();
 
-	ac_index = chain_data->active_chain;
+	ac_index = READ_ONCE(chain_data->active_chain);
 	if (unlikely(ac_index >= HIKE_CHAIN_STACK_DEPTH_MAX))
 		goto out;
 
-	active_chain = &chain_data->chains[ac_index &
-					   (HIKE_CHAIN_STACK_DEPTH_MAX - 1)];
+	WRITE_ONCE(active_chain, &chain_data->chains[ac_index &
+					   (HIKE_CHAIN_STACK_DEPTH_MAX - 1)]);
 out:
-	barrier();
-
 	return active_chain;
 }
 
@@ -947,13 +941,13 @@ out:
 static __always_inline int
 __hike_chain_upc_add(struct hike_chain *chain, __s16 off)
 {
-	__u16 upc = chain->upc + off;
-	__u16 ninsn = chain->ninsn;
+	__u16 upc = READ_ONCE(chain->upc) + off;
+	__u16 ninsn = READ_ONCE(chain->ninsn);
 
 	if (upc > HIKE_CHAIN_NINSN_MAX || upc > ninsn)
 		return -ENOBUFS;
 
-	chain->upc = upc;
+	WRITE_ONCE(chain->upc, upc);
 
 	return 0;
 }
@@ -966,11 +960,13 @@ static __always_inline int __hike_chain_upc_inc(struct hike_chain *chain)
 static __always_inline int
 __hike_active_chain_up(struct hike_chain_data *chain_data)
 {
-	if (unlikely(chain_data->active_chain >= HIKE_CHAIN_STACK_DEPTH_MAX))
+	__u16 active_chain = READ_ONCE(chain_data->active_chain);
+
+	if (unlikely(active_chain >= HIKE_CHAIN_STACK_DEPTH_MAX))
 		/* no more room for a new "chain" */
 		return -ENOBUFS;
 
-	++chain_data->active_chain;
+	WRITE_ONCE(chain_data->active_chain, active_chain + 1);
 
 	return 0;
 }
@@ -978,10 +974,12 @@ __hike_active_chain_up(struct hike_chain_data *chain_data)
 static __always_inline int
 __hike_active_chain_down(struct hike_chain_data *chain_data)
 {
-	if (unlikely(chain_data->active_chain == 0))
+	__u16 active_chain = READ_ONCE(chain_data->active_chain);
+
+	if (unlikely(active_chain == 0))
 		return -ENOBUFS;
 
-	--chain_data->active_chain;
+	WRITE_ONCE(chain_data->active_chain, active_chain - 1);
 
 	return 0;
 }
@@ -1466,7 +1464,7 @@ static __always_inline int hike_shared_mem_init(void)
 	/* writing on the shmem area before using it makes happy the
 	 * verifier... just another trick.
 	 */
-	shmem->reserved = 0;
+	WRITE_ONCE(shmem->reserved, 0);
 	return 0;
 }
 
@@ -1649,15 +1647,12 @@ int __hike_elem_call_insn(struct hike_chain_data *chain_data,
 	return -EFAULT;
 }
 
-/* for the moment (kernel 5.10) global functions do not support different types
- * wrt to scalars or ctx pointers :-(
- */
-static __noinline int
+static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
-	struct hike_insn __insn, *insn;
 	struct hike_chain *cur_chain;
+	struct hike_insn *insn;
 	__u64 *reg_ref;
 	__u64 reg_val;
 	__u8 jmp_cond;
@@ -1677,13 +1672,6 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (unlikely(!insn))
 		return -EFAULT;
 
-	/* let's copy locally the _insn and then take back the reference to
-	 * the insn which is in this case stored on the stack. This is a trick
-	 * fo the optimizer...
-	 */
-	__insn = *insn;
-	insn = &__insn;
-
 	opcode = insn->hic_code;
 
 	/* order of instructions here is important due to optimization done by
@@ -1698,6 +1686,10 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	/* good opcode descriptions are reported here:
 	 * https://github.com/iovisor/bpf-docs/blob/master/eBPF.md
 	 */
+
+	/* relax the verifier by inserting a call to a "nop" helper function */
+	relax_verifier();
+
 	switch (opcode) {
 
 	/* convert endianess of a register */
@@ -2167,8 +2159,8 @@ int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)		\
 			    rc);					\
 		return rc;						\
 	}								\
-									\
 	barrier();							\
+	relax_verifier();						\
 	hike_chain_next(ctx);						\
 	/* fallback by default means aborted */				\
 aborted:								\
