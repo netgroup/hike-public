@@ -49,6 +49,50 @@ typedef __u8	bool;
 #define unlikely(x)	__builtin_expect(!!(x), 0)
 #endif
 
+#ifndef __maybe_unused
+#define __maybe_unused		__attribute__((__unused__))
+#endif
+
+#ifndef __READ_ONCE
+#define __READ_ONCE(X)		(*(volatile typeof(X) *)&X)
+#endif
+
+#ifndef __WRITE_ONCE
+#define __WRITE_ONCE(X, V)	(*(volatile typeof(X) *)&X) = (V)
+#endif
+
+/* {READ,WRITE}_ONCE() with verifier workaround via (bpf_)barrier(). */
+
+#ifndef READ_ONCE
+#define READ_ONCE(X)						\
+({								\
+	typeof(X) __val = __READ_ONCE(X);			\
+	barrier();						\
+	__val;							\
+})
+#endif
+
+#ifndef WRITE_ONCE
+#define WRITE_ONCE(X, V)					\
+({								\
+	typeof(X) __val = (V);					\
+	__WRITE_ONCE(X, __val);					\
+	barrier();						\
+	__val;							\
+})
+#endif
+
+/* relax_verifier is a dummy helper call to introduce a pruning checkpoint to
+ * help relax the verifier to avoid reaching complexity limits on older
+ * kernels.
+ */
+static __always_inline void relax_verifier(void)
+{
+#ifndef HAVE_LARGE_INSN_LIMIT
+       volatile int __maybe_unused id = bpf_get_smp_processor_id();
+#endif
+}
+
 /* the total number of different programs that can be used */
 #define GEN_PROG_TABLE_SIZE		256
 
