@@ -227,6 +227,30 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/l2red
 
+	mkdir -p /sys/fs/bpf/{progs/appcfg,maps/appcfg}
+	bpftool prog loadall app_cfg.o /sys/fs/bpf/progs/appcfg type xdp \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
+		pinmaps /sys/fs/bpf/maps/appcfg
+
+	bpftool prog loadall app_cfg_load.o /sys/fs/bpf/progs/appcfg type xdp \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map	\
+		map name hvm_shmem_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map	\
+		map name map_app_cfg					\
+			pinned /sys/fs/bpf/maps/appcfg/map_app_cfg
+
 	# NOT an HIKe eBPF Program
 	mkdir -p /sys/fs/bpf/{progs/rawpass,}
 	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rawpass type xdp
@@ -282,6 +306,10 @@ read -r -d '' sut_env <<-EOF
 		key	hex 1f 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/l2red/hvxdp_l2red
 
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+		key	hex 11 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/appcfg/hvxdp_app_cfg_load
+
 	# =================================================================== #
 
 
@@ -312,6 +340,13 @@ read -r -d '' sut_env <<-EOF
 	# 	key hex		00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 01 \
 	# 			00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 02 \
 	# 	value hex	ab 00 00 00 00 00 00 00
+
+	# Configure the appcfg by setting the Collector oif KEY (0x2) with the
+	# supplied value (0x4 which is the SUT cl0 ifindex)
+	bpftool map update					\
+		pinned /sys/fs/bpf/maps/appcfg/map_app_cfg	\
+		key	hex	02 00 00 00			\
+		value	hex	04 00 00 00
 
 	/bin/bash
 EOF

@@ -35,6 +35,7 @@ enum {
 enum {
 	HIKE_APP_CFG_KEY_UNSPEC		= 0,
 	HIKE_APP_CFG_KEY_NETSTATE	= 1,
+	HIKE_APP_CFG_KEY_COLLECTOR_OIF	= 2,
 };
 
 enum {

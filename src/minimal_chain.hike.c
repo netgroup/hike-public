@@ -389,9 +389,8 @@ out:
 
 HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_RED_ID)
 {
-	/* FIXME: harcoded for the moment but it can be read from the app_cfg */
-	const __u32 oif = 4;
-	__s64 rc;
+	__u32 oif;
+	__u64 rc;
 	__u64 ts;
 
 	rc = ipv6_hset_srcdst(IPV6_HSET_ACTION_LOOKUP_AND_CLEAN);
@@ -411,8 +410,19 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_RED_ID)
 
 redirect:
 	PCPU_MON_INC_REDIRECT();
+
+	/* let's load the collector oif from the app config HIKe eBPF Program */
+	rc = app_cfg_load(HIKE_APP_CFG_KEY_COLLECTOR_OIF);
+	if (rc >> 32)
+		goto error;
+
+	/* lower 32 bits contain the oif */
+	oif = __to_u32(rc);
 	l2red(oif);
 	goto out;
+
+error:
+	PCPU_MON_INC_ERROR();
 drop:
 	PCPU_MON_INC_DROP();
 	packet_drop();

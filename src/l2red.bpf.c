@@ -17,7 +17,7 @@
 
 HIKE_PROG(HIKE_PROG_NAME)
 {
-	const __u32 oif = HVM_ARG2;
+	const __u32 oif = __to_u32(HVM_ARG2);
 
 	DEBUG_HKPRG_PRINT("ARG1=0x%llx, ARG2=%d", HVM_ARG1, oif);
 
