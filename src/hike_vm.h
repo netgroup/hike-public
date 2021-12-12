@@ -1340,11 +1340,11 @@ __hike_memory_chain_stack_read(struct hike_chain_data *chain_data, __u64 *ref,
 	void *stack;
 
 	cur_chain =  __hike_get_active_chain(chain_data);
-	if (!cur_chain)
+	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
 	stack = __ACCESS_REGMEM_STACK(&cur_chain->regmem);
-	if (!stack)
+	if (unlikely(!stack))
 		return -ENOMEM;
 
 	return __hike_memory_load(size, ref, stack, vinfo->off,
@@ -1359,11 +1359,11 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 	void *stack;
 
 	cur_chain =  __hike_get_active_chain(chain_data);
-	if (!cur_chain)
+	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
 	stack = __ACCESS_REGMEM_STACK(&cur_chain->regmem);
-	if (!stack)
+	if (unlikely(!stack))
 		return -ENOMEM;
 
 	return __hike_memory_store(size, val, stack, vinfo->off,
@@ -1435,7 +1435,7 @@ __hike_pcpu_shared_memory_read(__u64 *ref, const struct vaddr_info *vinfo,
 	const __u32 off = 0;
 
 	shmem = bpf_map_lookup_elem(&hvm_shmem_map, &off);
-	if (!shmem)
+	if (unlikely(!shmem))
 		return -ENOMEM;
 
 	return __hike_memory_load(size, ref, (void *)&shmem->data[0],
@@ -1451,7 +1451,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 	const __u32 off = 0;
 
 	shmem = bpf_map_lookup_elem(&hvm_shmem_map, &off);
-	if (!shmem)
+	if (unlikely(!shmem))
 		return -ENOMEM;
 
 	return __hike_memory_store(size, val, (void *)&shmem->data[0],
