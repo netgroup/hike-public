@@ -477,7 +477,7 @@ struct hike_chain_regmem {
 #define __ACCESS_REGMEM_STACK(regmem)	((void *)&(regmem)->stack[0])
 
 /* number of HIKe VM instructions contained in a single HIKe chain */
-#define HIKE_CHAIN_NINSN_MAX			32
+#define HIKE_CHAIN_NINSN_MAX		64
 
 struct hike_chain {
 	__u32 chain_id;
@@ -841,52 +841,43 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 			d->raw_insns[i] = s->raw_insns[i];	\
 		}
 
-#define __COPY_CHAIN_INSNS_CANARY	32
+#define __COPY_4_INST(start, end)				\
+	case (start):						\
+	case (start) + 1:					\
+	case (start) + 2:					\
+	__COPY_INST((start), (start) + 3)			\
+	/* fallthrough */
+
+#define __COPY_8_INST(start, end)				\
+	__COPY_4_INST((start) + 4, (start) + 4 + 3);		\
+	/* fallthrough */					\
+	__COPY_4_INST((start), (start) + 3)			\
+	/* fallthrough */
 
 	/* we unroll the copy of the hike chain at multiple of 4 instructions
 	 * per time. If the number of instructions is less than k*4 then we
 	 * copy garbage but this is not an issue at all.
 	 */
 	switch (ninsn) {
-	case 29:
-	case 30:
-	case 31:
-	__COPY_INST(29, 32);
+#define __COPY_CHAIN_INSNS_CANARY	64
+
+#if HIKE_CHAIN_NINSN_MAX == 64
+	__COPY_8_INST(57, 64);
 	/* fallthrough */
-	case 25:
-	case 26:
-	case 27:
-	__COPY_INST(25, 28);
+	__COPY_8_INST(49, 56);
 	/* fallthrough */
-	case 21:
-	case 22:
-	case 23:
-	__COPY_INST(21, 24);
+	__COPY_8_INST(41, 48);
 	/* fallthrough */
-	case 17:
-	case 18:
-	case 19:
-	__COPY_INST(17, 20);
+	__COPY_8_INST(33, 40);
 	/* fallthrough */
-	case 13:
-	case 14:
-	case 15:
-	__COPY_INST(13, 16);
+#endif
+	__COPY_8_INST(25, 32);
 	/* fallthrough */
-	case 9:
-	case 10:
-	case 11:
-	__COPY_INST(9, 12);
+	__COPY_8_INST(17, 24);
 	/* fallthrough */
-	case 5:
-	case 6:
-	case 7:
-	__COPY_INST(5, 8);
+	__COPY_8_INST(9, 16);
 	/* fallthrough */
-	case 1:
-	case 2:
-	case 3:
-	__COPY_INST(1, 4);
+	__COPY_8_INST(1, 8);
 	/* fallthrough */
 	case 0:
 		break;
@@ -902,6 +893,8 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 out:
 	return 0;
 #undef __COPY_CHAIN_INSNS_CANARY
+#undef __COPY_8_INST
+#undef __COPY_4_INST
 #undef __COPY_INST
 }
 
