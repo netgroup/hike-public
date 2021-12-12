@@ -1610,6 +1610,9 @@ int __hike_elem_call_insn(struct hike_chain_data *chain_data,
 	return -EFAULT;
 }
 
+/* for the moment (kernel 5.10) global functions do not support different types
+ * wrt to scalars or ctx pointers :-(
+ */
 static __noinline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
