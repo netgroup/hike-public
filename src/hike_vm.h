@@ -1880,6 +1880,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 	/* conditional jump section using src and dst registers */
 	case HIKE_JMP64 | HIKE_JLT | HIKE_X:
+	case HIKE_JMP64 | HIKE_JGT | HIKE_X:
 	/* conditional jump section using immediate */
 	case HIKE_JMP64 | HIKE_JNE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JEQ | HIKE_K:
@@ -1917,6 +1918,8 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		/* ============================================= */
 		COND_JUMP(HIKE_JMP64 | HIKE_JLT | HIKE_X,
 			  jmp_cond, *reg_ref, <, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JGT | HIKE_X,
+			  jmp_cond, *reg_ref, >, reg_val, __u64);
 		default:
 			return -EFAULT;
 		}
