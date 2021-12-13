@@ -24,7 +24,7 @@
 #endif
 
 #ifndef HIKE_VM_VERCOMP_LEVEL
-#define HIKE_VM_VERCOMP_LEVEL	0
+#define HIKE_VM_VERCOMP_LEVEL	1
 #endif
 
 /* --- */
