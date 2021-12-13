@@ -14,6 +14,21 @@
 #include "hike_vm_common.h"
 #include "map.h"
 
+
+/* HIKE VM extern macros
+ * =====================
+ */
+
+#ifndef HIKE_DEBUG
+#define HIKE_DEBUG		0
+#endif
+
+#ifndef HIKE_VM_VERCOMP_LEVEL
+#define HIKE_VM_VERCOMP_LEVEL	0
+#endif
+
+/* --- */
+
 /* TODO: move in hike_vm_common.h ? */
 typedef __u8	bool;
 #define true	((__u8)1)
@@ -93,6 +108,12 @@ static __always_inline void relax_verifier(void)
 #endif
 }
 
+#if HIKE_VM_VERCOMP_LEVEL > 0
+#define relax_verifier_vc()	relax_verifier()
+#else
+#define relax_verifier_vc()	do { } while (0)
+#endif
+
 /* the total number of different programs that can be used */
 #define GEN_PROG_TABLE_SIZE		256
 
@@ -103,10 +124,6 @@ static __always_inline void relax_verifier(void)
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-
-#ifndef HIKE_DEBUG
-#define HIKE_DEBUG 0
-#endif
 
 #if HIKE_DEBUG == 1
 #define DEBUG_PRINT(...)					\
@@ -1651,8 +1668,8 @@ static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
+	struct hike_insn *insn, __insn;
 	struct hike_chain *cur_chain;
-	struct hike_insn *insn;
 	__u64 *reg_ref;
 	__u64 reg_val;
 	__u8 jmp_cond;
@@ -1672,6 +1689,10 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (unlikely(!insn))
 		return -EFAULT;
 
+	/* trick for the compiler/optimizer */
+	WRITE_ONCE(__insn, *insn);
+	WRITE_ONCE(insn, &__insn);
+
 	opcode = insn->hic_code;
 
 	/* order of instructions here is important due to optimization done by
@@ -1683,15 +1704,16 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	__hike_chain_upc_inc(cur_chain);
 	/* PC now points to PC + 1 */
 
+	/* relax the verifier by inserting a call to a "nop" helper function.
+	 * Note that the relax verifier (vc stands for verifier compatibility) is
+	 * turned on only if HIKE_VM_VERCOMP_LEVEL > 0 .
+	 */
+	relax_verifier_vc();
+
 	/* good opcode descriptions are reported here:
 	 * https://github.com/iovisor/bpf-docs/blob/master/eBPF.md
 	 */
-
-	/* relax the verifier by inserting a call to a "nop" helper function */
-	relax_verifier();
-
 	switch (opcode) {
-
 	/* convert endianess of a register */
 	case HIKE_ALU | HIKE_END | HIKE_TO_BE:
 	case HIKE_ALU | HIKE_END | HIKE_TO_LE:
