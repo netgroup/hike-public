@@ -105,7 +105,7 @@ static __always_inline void relax_verifier(void)
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 #ifndef HIKE_DEBUG
-#define HIKE_DEBUG 0
+#define HIKE_DEBUG 1
 #endif
 
 #if HIKE_DEBUG == 1
