@@ -271,7 +271,7 @@ HIKE_CHAIN_1(HIKE_CHAIN_TLCL_TEST_ID)
 	__asm__ __volatile__
 		("r1 = " stringify(HIKE_EBPF_PROG_TLCL_DO_STUFF) "\t\n");
 #pragma unroll
-	for (i = 1; i <= TLCL_MAX_DEPTH; ++i) {
+	for (i = 1; i < TLCL_MAX_DEPTH; ++i) {
 		//do_some_stuff_on_packet();
 		__asm__ __volatile__("call 4352\t\n");
 	}
@@ -372,6 +372,57 @@ HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_ID)
 	packet_pass();
 	goto out;
 
+drop:
+	PCPU_MON_INC_DROP();
+	packet_drop();
+out:
+	/* never return from here */
+	return 0;
+}
+
+#define PCPU_MON_INC_REDIRECT()					\
+	hike_elem_call_2(HIKE_EBPF_PROG_PCPU_MON,		\
+			 HIKE_PCPU_MON_EVENT_REDIRECT)
+
+#define l2red(__oif)	\
+	hike_elem_call_2(HIKE_EBPF_PROG_L2RED, (__oif))
+
+HIKE_CHAIN_1(HIKE_CHAIN_DDOS_FULL_RED_ID)
+{
+	__u32 oif;
+	__u64 rc;
+	__u64 ts;
+
+	rc = ipv6_hset_srcdst(IPV6_HSET_ACTION_LOOKUP_AND_CLEAN);
+	if (!rc)
+		goto drop;
+
+	ts = ipv6_flow_meter_srcdst();
+	if (ts < RX_ALLOWED_INTVAL) {
+		/* blacklist the current flow */
+		ipv6_hset_srcdst(IPV6_HSET_ACTION_ADD);
+		goto redirect;
+	}
+
+	PCPU_MON_INC_ALLOW();
+	packet_pass();
+	goto out;
+
+redirect:
+	PCPU_MON_INC_REDIRECT();
+
+	/* let's load the collector oif from the app config HIKe eBPF Program */
+	rc = app_cfg_load(HIKE_APP_CFG_KEY_COLLECTOR_OIF);
+	if (rc >> 32)
+		goto error;
+
+	/* lower 32 bits contain the oif */
+	oif = __to_u32(rc);
+	l2red(oif);
+	goto out;
+
+error:
+	PCPU_MON_INC_ERROR();
 drop:
 	PCPU_MON_INC_DROP();
 	packet_drop();

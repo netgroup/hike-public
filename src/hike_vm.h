@@ -49,6 +49,50 @@ typedef __u8	bool;
 #define unlikely(x)	__builtin_expect(!!(x), 0)
 #endif
 
+#ifndef __maybe_unused
+#define __maybe_unused		__attribute__((__unused__))
+#endif
+
+#ifndef __READ_ONCE
+#define __READ_ONCE(X)		(*(volatile typeof(X) *)&X)
+#endif
+
+#ifndef __WRITE_ONCE
+#define __WRITE_ONCE(X, V)	(*(volatile typeof(X) *)&X) = (V)
+#endif
+
+/* {READ,WRITE}_ONCE() with verifier workaround via (bpf_)barrier(). */
+
+#ifndef READ_ONCE
+#define READ_ONCE(X)						\
+({								\
+	typeof(X) __val = __READ_ONCE(X);			\
+	barrier();						\
+	__val;							\
+})
+#endif
+
+#ifndef WRITE_ONCE
+#define WRITE_ONCE(X, V)					\
+({								\
+	typeof(X) __val = (V);					\
+	__WRITE_ONCE(X, __val);					\
+	barrier();						\
+	__val;							\
+})
+#endif
+
+/* relax_verifier is a dummy helper call to introduce a pruning checkpoint to
+ * help relax the verifier to avoid reaching complexity limits on older
+ * kernels.
+ */
+static __always_inline void relax_verifier(void)
+{
+#ifndef HAVE_LARGE_INSN_LIMIT
+       volatile int __maybe_unused id = bpf_get_smp_processor_id();
+#endif
+}
+
 /* the total number of different programs that can be used */
 #define GEN_PROG_TABLE_SIZE		256
 
@@ -89,13 +133,14 @@ bpf_map(hvm_hprog_map, PROG_ARRAY, __u32, __u32, GEN_PROG_TABLE_SIZE);
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
-
-
 #ifndef BIT
 #define BIT(nr)		(UL(1) << (nr))
 #endif
 
-/* XXX: note those values depend on the UPROG_MASK_BITS and CHAIN_MASK_BITS */
+/* Default Chain ID (aka bootstrap Chain ID)
+ * This Chain ID is very particular: indeed, the 31-th bit is set to 1 rather
+ * than 0 as it should be for every valid Chain's ID.
+ */
 #define CHAIN_DEFAULT_ID	0xcafef00d
 
 /* a chain id must have this bit set */
@@ -226,7 +271,11 @@ enum {
 
 /* alu fields */
 #define HIKE_ADD			0x00
+#define HIKE_SUB			0x10
 #define HIKE_AND			0x50
+#define HIKE_OR				0X40
+#define	HIKE_LSH			0x60
+#define	HIKE_RSH			0x70
 #define HIKE_MOV			0xb0
 
 /* source modifiers */
@@ -361,6 +410,9 @@ enum {
 	HIKE_RAW_INSN(HIKE_JMP64 | HIKE_OP(HIKE_CALL),			\
 		      0, 0, 0, IMM)
 
+#define HIKE_CALL_ELEM_NARGS_1_INSN()					\
+	HIKE_RAW_CALL_INSN(HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_1_ID))
+
 #define HIKE_CALL_ELEM_NARGS_2_INSN()					\
 	HIKE_RAW_CALL_INSN(HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_2_ID))
 
@@ -471,7 +523,7 @@ struct hike_chain_regmem {
 #define __ACCESS_REGMEM_STACK(regmem)	((void *)&(regmem)->stack[0])
 
 /* number of HIKe VM instructions contained in a single HIKe chain */
-#define HIKE_CHAIN_NINSN_MAX			32
+#define HIKE_CHAIN_NINSN_MAX		64
 
 struct hike_chain {
 	__u32 chain_id;
@@ -481,8 +533,9 @@ struct hike_chain {
 	/* registers and private memory for an HIKe Microprogram/Chain */
 	struct hike_chain_regmem regmem;
 
-	/* TODO: This is only TEMPORARY: indeed, the insns should be moved into
-	 * another table/map.
+	/* moving the chain text code outside pcpu memory is slower for a small
+	 * (~32 instructions) chain rather than copy the whole chain and put it
+	 * in pcpu memory.
 	 */
 	struct hike_insn insns[HIKE_CHAIN_NINSN_MAX];
 };
@@ -555,8 +608,13 @@ enum hike_xdp_action {
 
 /* vaddr_info can be encoded within 32 bits */
 struct vaddr_info {
-	__u32 off	:24;		/* little endian LSB */
-	__u32 bank_id	:8;		/* little endian MSB */
+	union {
+		struct {
+			__u32 off	:24;	/* little endian LSB */
+			__u32 bank_id	:8;	/* little endian MSB */
+		};
+		__u32 addr;
+	};
 };
 
 #define HIKE_MEM_BID_ZERO		0x00 /* reserved */
@@ -693,7 +751,7 @@ bpf_map(hvm_cdata_map, PERCPU_ARRAY, __u32, struct hike_chain_data, 1);
 bpf_map(hvm_chain_map, HASH, __u32, struct hike_chain,
 	HIKE_CHAIN_MAP_NELEM_MAX);
 
-#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	127
+#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	255
 struct hike_shared_mem_data {
 	__u8 data[HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE];
 	__u8 reserved;
@@ -710,12 +768,10 @@ static __always_inline int
 __hike_chain_store_reg(struct hike_chain *cur_chain, __u32 index,
 		       const __u64 *val)
 {
-	barrier();
-	if (index > HIKE_REG_MAX)
+	if (unlikely(index > HIKE_REG_MAX))
 		return -EINVAL;
 
-	__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index) = *val;
-	barrier();
+	WRITE_ONCE(__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index), *val);
 
 	return 0;
 }
@@ -724,81 +780,70 @@ static __always_inline int
 __hike_chain_load_reg(struct hike_chain *cur_chain, __u32 index,
 		      __u64 *const val)
 {
-	barrier();
-	if (index > HIKE_REG_MAX)
-		return -EINVAL;
+	int rc = -EINVAL;
 
-	*val = __UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+	if (likely(index <= HIKE_REG_MAX)) {
+		*val = READ_ONCE(__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain,
+								  index));
+		rc = 0;
+	}
+
 	barrier();
 
-	return 0;
+	return rc;
 }
 
 static __always_inline int
 __hike_chain_ref_reg(struct hike_chain *cur_chain, __u32 index, __u64 ** reg)
 {
-	barrier();
-	if (index > HIKE_REG_MAX)
-		return -EINVAL;
+	int rc = -EINVAL;
 
-	*reg = &__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+	if (unlikely(index <= HIKE_REG_MAX)) {
+		*reg = &__UNSAFE_ACCESS_HIKE_CHAIN_REG_N(cur_chain, index);
+		rc = 0;
+	}
+
 	barrier();
 
-	return 0;
+	return rc;
 }
 
 static __always_inline struct hike_chain *hike_chain_lookup(const __u32 *id)
 {
-	struct hike_chain *hc;
-
 	if (unlikely(!id))
 		return NULL;
 
-	hc = bpf_map_lookup_elem(&hvm_chain_map, id);
-	if (unlikely(!hc))
-		return NULL;
-
-	return hc;
+	return bpf_map_lookup_elem(&hvm_chain_map, id);
 }
 
 static __always_inline struct hike_chain_data *get_hike_chain_data()
 {
-	struct hike_chain_data *hcd;
 	const __u32 id = 0;
 
-	hcd = bpf_map_lookup_elem(&hvm_cdata_map, &id);
-	if (unlikely(!hcd))
-		return NULL;
-
-	return hcd;
+	return bpf_map_lookup_elem(&hvm_cdata_map, &id);
 }
 
 static __always_inline struct hike_chain
 *__hike_get_active_chain(struct hike_chain_data *chain_data)
 {
-	struct hike_chain *active_chain;
+	struct hike_chain *active_chain = NULL;
 	__u16 ac_index;
 
 	/* optimizer does its own wizardry here... let's do in this way to
 	 * make the verifier happy...
 	 */
-	barrier();
 
-	ac_index = chain_data->active_chain;
+	ac_index = READ_ONCE(chain_data->active_chain);
 	if (unlikely(ac_index >= HIKE_CHAIN_STACK_DEPTH_MAX))
-		return NULL;
+		goto out;
 
-	active_chain = &chain_data->chains[ac_index &
-					   (HIKE_CHAIN_STACK_DEPTH_MAX - 1)];
-	if (unlikely(!active_chain))
-		return NULL;
-
-	barrier();
-
+	WRITE_ONCE(active_chain, &chain_data->chains[ac_index &
+					   (HIKE_CHAIN_STACK_DEPTH_MAX - 1)]);
+out:
 	return active_chain;
 }
 
-static __always_inline void
+static __always_inline int
 __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 {
 	union __u {
@@ -809,33 +854,100 @@ __hike_copy_chain(struct hike_chain *const dst, const struct hike_chain *src)
 	const struct hike_insn *src_insns = &src->insns[0];
 	struct hike_insn *dst_insns = &dst->insns[0];
 	const union __u *s = (void *)src_insns;
+	__u32 src_chain_id = src->chain_id;
 	union __u *d = (void *)dst_insns;
+	__u16 ninsn;
+	int i;
 
-	/* copy the head of chain */
-	dst->chain_id = src->chain_id;
-	dst->ninsn = src->ninsn;
-	/* TODO: make a smart copy which copies only non-zero instructions */
+	/* XXX: src->up SHOULD BE always zero */
 	dst->upc = src->upc;
 
-	/* memcpy is not very efficient here; it emits 8-bit move instructions
-	 * rather than 64-bit ones. This trick forces the struct copy using
-	 * 64-bit moves.
+	if (dst->chain_id == src_chain_id) {
+		/* the chain that we want to copy is already in the per-cpu
+		 * chain "cache". We do NOT copy the chain again!
+		 */
+		DEBUG_PRINT("HIKe VM debug: HIT per-cpu hike_chain .text cache for Chain ID=0x%x",
+			    src_chain_id);
+		goto out;
+	}
+
+	/* copy the head of chain */
+	dst->chain_id = src_chain_id;
+	ninsn = dst->ninsn = src->ninsn;
+
+#define __COPY_INST(start, end)					\
+	case end:						\
+		for (i = (start) - 1; i < (end); ++i) {		\
+			d->raw_insns[i] = s->raw_insns[i];	\
+		}
+
+#define __COPY_4_INST(start, end)				\
+	case (start):						\
+	case (start) + 1:					\
+	case (start) + 2:					\
+	__COPY_INST((start), (start) + 3)			\
+	/* fallthrough */
+
+#define __COPY_8_INST(start, end)				\
+	__COPY_4_INST((start) + 4, (start) + 4 + 3);		\
+	/* fallthrough */					\
+	__COPY_4_INST((start), (start) + 3)			\
+	/* fallthrough */
+
+	/* we unroll the copy of the hike chain at multiple of 4 instructions
+	 * per time. If the number of instructions is less than k*4 then we
+	 * copy garbage but this is not an issue at all.
 	 */
-	*d = *s;
+	switch (ninsn) {
+#define __COPY_CHAIN_INSNS_CANARY	64
+
+#if HIKE_CHAIN_NINSN_MAX == 64
+	__COPY_8_INST(57, 64);
+	/* fallthrough */
+	__COPY_8_INST(49, 56);
+	/* fallthrough */
+	__COPY_8_INST(41, 48);
+	/* fallthrough */
+	__COPY_8_INST(33, 40);
+	/* fallthrough */
+#endif
+	__COPY_8_INST(25, 32);
+	/* fallthrough */
+	__COPY_8_INST(17, 24);
+	/* fallthrough */
+	__COPY_8_INST(9, 16);
+	/* fallthrough */
+	__COPY_8_INST(1, 8);
+	/* fallthrough */
+	case 0:
+		break;
+	default:
+#if __COPY_CHAIN_INSNS_CANARY != HIKE_CHAIN_NINSN_MAX
+#error "HIKe VM compilation error: not enough space for copying the whole chain"
+#endif
+		DEBUG_PRINT("HIKe VM debug: not enough space for copying the whole Chain ID=0x%x",
+			     dst->chain_id);
+		return -ENOBUFS;
+	}
+
+out:
+	return 0;
+#undef __COPY_CHAIN_INSNS_CANARY
+#undef __COPY_8_INST
+#undef __COPY_4_INST
+#undef __COPY_INST
 }
 
 static __always_inline int
 __hike_chain_upc_add(struct hike_chain *chain, __s16 off)
 {
-	__u16 upc = chain->upc + off;
-	__u16 ninsn = chain->ninsn;
+	__u16 upc = READ_ONCE(chain->upc) + off;
+	__u16 ninsn = READ_ONCE(chain->ninsn);
 
-	if (upc > HIKE_CHAIN_NINSN_MAX)
-		return -ENOBUFS;
-	if (upc > ninsn)
+	if (upc > HIKE_CHAIN_NINSN_MAX || upc > ninsn)
 		return -ENOBUFS;
 
-	chain->upc = upc;
+	WRITE_ONCE(chain->upc, upc);
 
 	return 0;
 }
@@ -848,11 +960,13 @@ static __always_inline int __hike_chain_upc_inc(struct hike_chain *chain)
 static __always_inline int
 __hike_active_chain_up(struct hike_chain_data *chain_data)
 {
-	if (unlikely(chain_data->active_chain >= HIKE_CHAIN_STACK_DEPTH_MAX))
+	__u16 active_chain = READ_ONCE(chain_data->active_chain);
+
+	if (unlikely(active_chain >= HIKE_CHAIN_STACK_DEPTH_MAX))
 		/* no more room for a new "chain" */
 		return -ENOBUFS;
 
-	++chain_data->active_chain;
+	WRITE_ONCE(chain_data->active_chain, active_chain + 1);
 
 	return 0;
 }
@@ -860,10 +974,12 @@ __hike_active_chain_up(struct hike_chain_data *chain_data)
 static __always_inline int
 __hike_active_chain_down(struct hike_chain_data *chain_data)
 {
-	if (unlikely(chain_data->active_chain == 0))
+	__u16 active_chain = READ_ONCE(chain_data->active_chain);
+
+	if (unlikely(active_chain == 0))
 		return -ENOBUFS;
 
-	--chain_data->active_chain;
+	WRITE_ONCE(chain_data->active_chain, active_chain - 1);
 
 	return 0;
 }
@@ -901,11 +1017,10 @@ static __always_inline int __hike_push_chain(struct hike_chain_data *chain_data,
 	if (unlikely(!active_chain))
 		return -ENOBUFS;
 
-	/* XXX: copy the given chain into the per-cpu chain memory area; maybe
-	 * inefficient but we keep it for the moment.
-	 */
-	__hike_copy_chain((struct hike_chain *const)active_chain,
-			  (const struct hike_chain *)new_chain);
+	rc = __hike_copy_chain((struct hike_chain *const)active_chain,
+			       (const struct hike_chain *)new_chain);
+	if (unlikely(rc < 0))
+		return rc;
 
 	/* make available registers r0, r1-r5 following eBPF calling conv */
 	for (i = 0; i < __HIKE_ELEM_CALL_NARGS_MAX; ++i) {
@@ -1000,16 +1115,10 @@ static __always_inline int __hike_pop_chain(struct hike_chain_data *chain_data)
 static __always_inline struct
 hike_insn *__hike_chain_hike_insn_at(struct hike_chain *hc, __u16 upc)
 {
-	struct hike_insn *insn;
-
 	if (unlikely(upc >= hc->ninsn || upc >= HIKE_CHAIN_NINSN_MAX))
 		return NULL;
 
-	insn = &hc->insns[upc & (HIKE_CHAIN_NINSN_MAX - 1)];
-	if (!insn)
-		return NULL;
-
-	return insn;
+	return &hc->insns[upc & (HIKE_CHAIN_NINSN_MAX - 1)];
 }
 
 static __always_inline struct
@@ -1273,11 +1382,11 @@ __hike_memory_chain_stack_read(struct hike_chain_data *chain_data, __u64 *ref,
 	void *stack;
 
 	cur_chain =  __hike_get_active_chain(chain_data);
-	if (!cur_chain)
+	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
 	stack = __ACCESS_REGMEM_STACK(&cur_chain->regmem);
-	if (!stack)
+	if (unlikely(!stack))
 		return -ENOMEM;
 
 	return __hike_memory_load(size, ref, stack, vinfo->off,
@@ -1292,11 +1401,11 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 	void *stack;
 
 	cur_chain =  __hike_get_active_chain(chain_data);
-	if (!cur_chain)
+	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
 	stack = __ACCESS_REGMEM_STACK(&cur_chain->regmem);
-	if (!stack)
+	if (unlikely(!stack))
 		return -ENOMEM;
 
 	return __hike_memory_store(size, val, stack, vinfo->off,
@@ -1307,6 +1416,41 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 ({								\
 	const __u32 __off = 0;					\
 	bpf_map_lookup_elem(&hvm_shmem_map, &__off);		\
+})
+
+#define __hike_virt_to_phys(__vaddr, __pptr) 			\
+({								\
+	struct vaddr_info __vinfo = { .addr = __vaddr };	\
+	struct hike_shared_mem_data *__shmem;			\
+	int __rc = -EINVAL;					\
+								\
+	switch (__vinfo.bank_id) {				\
+	case HIKE_MEM_BID_PCPU_SHARED:				\
+		__shmem = hike_pcpu_shmem();			\
+		if (unlikely(!__shmem)) {			\
+			__rc = -EINVAL;				\
+			break;					\
+		}						\
+								\
+		if (unlikely(__vinfo.off + sizeof(**(__pptr)) >	\
+			     HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE)) { \
+			__rc = -ENOBUFS;			\
+			break;					\
+		}						\
+								\
+		*__pptr = (typeof(**(__pptr)) *)		\
+				&__shmem->data[__vinfo.off];	\
+								\
+		__rc = 0;					\
+		break;						\
+								\
+	default:						\
+		/* TODO: should be unsupported operation */	\
+		__rc = -EBADF;					\
+		break;						\
+	}							\
+								\
+	__rc;							\
 })
 
 static __always_inline int hike_shared_mem_init(void)
@@ -1320,7 +1464,7 @@ static __always_inline int hike_shared_mem_init(void)
 	/* writing on the shmem area before using it makes happy the
 	 * verifier... just another trick.
 	 */
-	shmem->reserved = 0;
+	WRITE_ONCE(shmem->reserved, 0);
 	return 0;
 }
 
@@ -1333,7 +1477,7 @@ __hike_pcpu_shared_memory_read(__u64 *ref, const struct vaddr_info *vinfo,
 	const __u32 off = 0;
 
 	shmem = bpf_map_lookup_elem(&hvm_shmem_map, &off);
-	if (!shmem)
+	if (unlikely(!shmem))
 		return -ENOMEM;
 
 	return __hike_memory_load(size, ref, (void *)&shmem->data[0],
@@ -1349,7 +1493,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 	const __u32 off = 0;
 
 	shmem = bpf_map_lookup_elem(&hvm_shmem_map, &off);
-	if (!shmem)
+	if (unlikely(!shmem))
 		return -ENOMEM;
 
 	return __hike_memory_store(size, val, (void *)&shmem->data[0],
@@ -1421,6 +1565,7 @@ __hike_pcpu_shared_memory_write(__u64 val, const struct vaddr_info *vinfo,
 		case HIKE_MEM_BID_PCPU_SHARED:				\
 			__rc = __hike_pcpu_shared_memory_write(		\
 					(REF), __vinfo, __size);	\
+			break;	/* exit from the switch case */		\
 		case HIKE_MEM_BID_ZERO:					\
 		case HIKE_MEM_BID_PRIVATE:				\
 		default:						\
@@ -1506,8 +1651,8 @@ static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
-	struct hike_insn __insn, *_insn, *insn;
 	struct hike_chain *cur_chain;
+	struct hike_insn *insn;
 	__u64 *reg_ref;
 	__u64 reg_val;
 	__u8 jmp_cond;
@@ -1523,16 +1668,9 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (unlikely(!cur_chain))
 		return -ENOBUFS;
 
-	_insn = __hike_chain_cur_hike_insn(cur_chain);
-	if (unlikely(!_insn))
+	insn = __hike_chain_cur_hike_insn(cur_chain);
+	if (unlikely(!insn))
 		return -EFAULT;
-
-	/* let's copy locally the _insn and then take back the reference to
-	 * the insn which is in this case stored on the stack. This is a trick
-	 * fo the optimizer...
-	 */
-	__insn = *_insn;
-	insn = &__insn;
 
 	opcode = insn->hic_code;
 
@@ -1548,6 +1686,10 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	/* good opcode descriptions are reported here:
 	 * https://github.com/iovisor/bpf-docs/blob/master/eBPF.md
 	 */
+
+	/* relax the verifier by inserting a call to a "nop" helper function */
+	relax_verifier();
+
 	switch (opcode) {
 
 	/* convert endianess of a register */
@@ -1645,12 +1787,12 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 	} break;
 
-	/* STX unstructions, i.e.: (*type)(dst_reg + off) = imm32 */
+	/* STX instructions, i.e.: (*type)(dst_reg + off) = imm32 */
 	case HIKE_ST | HIKE_MEM | HIKE_DW:
 	case HIKE_ST | HIKE_MEM | HIKE_W:
 	case HIKE_ST | HIKE_MEM | HIKE_H:
 	case HIKE_ST | HIKE_MEM | HIKE_B:
-	/* STX unstructions, i.e.: (*type)(dst_reg + off) = src_reg */
+	/* STX instructions, i.e.: (*type)(dst_reg + off) = src_reg */
 	case HIKE_STX | HIKE_MEM | HIKE_DW:
 	case HIKE_STX | HIKE_MEM | HIKE_W:
 	case HIKE_STX | HIKE_MEM | HIKE_H:
@@ -1717,7 +1859,11 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 })
 	/* ALU arithmetic  */
 	case HIKE_ALU64 | HIKE_ADD | HIKE_K:
+	case HIKE_ALU64 | HIKE_SUB | HIKE_K:
 	case HIKE_ALU64 | HIKE_AND | HIKE_K:
+	case HIKE_ALU64 | HIKE_OR  | HIKE_K:
+	case HIKE_ALU64 | HIKE_LSH | HIKE_K:
+	case HIKE_ALU64 | HIKE_RSH | HIKE_K:
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
 		if (rc < 0)
 			return rc;
@@ -1733,7 +1879,11 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		 */
 		switch (opcode) {
 		ALU(HIKE_ALU64 | HIKE_ADD | HIKE_K, *reg_ref, +, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_SUB | HIKE_K, *reg_ref, -, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_OR  | HIKE_K, *reg_ref, |, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_LSH | HIKE_K, *reg_ref, <<, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_RSH | HIKE_K, *reg_ref, >>, imm32, __u64);
 		default:
 			return -EFAULT;
 		}
@@ -1765,7 +1915,12 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		break;
 
 	/* conditional jump section using src and dst registers */
+	case HIKE_JMP64 | HIKE_JNE | HIKE_X:
+	case HIKE_JMP64 | HIKE_JEQ | HIKE_X:
+	case HIKE_JMP64 | HIKE_JGT | HIKE_X:
+	case HIKE_JMP64 | HIKE_JGE | HIKE_X:
 	case HIKE_JMP64 | HIKE_JLT | HIKE_X:
+	case HIKE_JMP64 | HIKE_JLE | HIKE_X:
 	/* conditional jump section using immediate */
 	case HIKE_JMP64 | HIKE_JNE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JEQ | HIKE_K:
@@ -1801,8 +1956,18 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_K,
 			  jmp_cond, *reg_ref, <=, imm32, __u64);
 		/* ============================================= */
+		COND_JUMP(HIKE_JMP64 | HIKE_JEQ | HIKE_X,
+			  jmp_cond, *reg_ref, ==, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JNE | HIKE_X,
+			  jmp_cond, *reg_ref, !=, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JGT | HIKE_X,
+			  jmp_cond, *reg_ref, >, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JGE | HIKE_X,
+			  jmp_cond, *reg_ref, >=, reg_val, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLT | HIKE_X,
 			  jmp_cond, *reg_ref, <, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_X,
+			  jmp_cond, *reg_ref, <=, reg_val, __u64);
 		default:
 			return -EFAULT;
 		}
@@ -1870,43 +2035,45 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
  */
 #define __hike_chain_do_exec(ctx, chain_data)				\
 ({									\
-	struct hike_chain_done_insn_bottom res = { 0, };		\
-	int i, rc = -ELOOP;						\
+	struct hike_chain_done_insn_bottom __res = { 0, };		\
+	int __i, __rc = -ELOOP;						\
 									\
-	for (i = 0; i < HIKE_CHAIN_EXEC_NINSN_MAX; ++i) {		\
-		rc = __hike_chain_do_exec_one_insn_top(ctx, chain_data,	\
-						       &res);		\
-		if (rc < 0)						\
+	for (__i = 0; __i < HIKE_CHAIN_EXEC_NINSN_MAX; ++__i) {		\
+		__rc = __hike_chain_do_exec_one_insn_top(ctx,		\
+							 chain_data,	\
+							 &__res);	\
+		if (__rc < 0)						\
 			break;						\
 	}								\
 									\
-	if (rc == -EINPROGRESS)	{					\
-		switch (res.opcode) {					\
+	if (__rc == -EINPROGRESS) {					\
+		switch (__res.opcode) {					\
 		case HIKE_JMP64 | HIKE_CALL:				\
-			bpf_tail_call(ctx, &hvm_hprog_map, res.prog_id);\
+			bpf_tail_call(ctx, &hvm_hprog_map,		\
+				      __res.prog_id);			\
 			/* fallback */					\
-			rc = -ENOENT;					\
+			__rc = -ENOENT;					\
 			break;						\
 		default:						\
-			rc = -EFAULT;					\
+			__rc = -EFAULT;					\
 			break;						\
 		}							\
 	}								\
 									\
-	rc;								\
+	__rc;								\
 })
 
 #define hike_chain_next(ctx)						\
 ({									\
-	struct hike_chain_data *chain_data = get_hike_chain_data();	\
-	int rc;								\
+	struct hike_chain_data *__chain_data = get_hike_chain_data();	\
+	int __rc;							\
 									\
-	if (unlikely(!chain_data))					\
-		rc = -ENOENT;						\
+	if (unlikely(!__chain_data))					\
+		__rc = -ENOENT;						\
 	else								\
-		rc = __hike_chain_do_exec(ctx, chain_data);		\
+		__rc = __hike_chain_do_exec(ctx, __chain_data);		\
 									\
-	rc;								\
+	__rc;								\
 })
 
 static __always_inline int
@@ -1929,15 +2096,16 @@ __hike_chain_boostrap_install(struct hike_chain_data *chain_data)
 	 */
 	ACCESS_HIKE_CHAIN_REG(boot_chain, 0) = 0;
 
+	/* poison the REG_1 register */
 	ACCESS_HIKE_CHAIN_REG(boot_chain, 1) = (__u32)0xf0f0f0f0;
-	ACCESS_HIKE_CHAIN_REG(boot_chain, 2) = 0;
 
+	/* initialize the stack pointer */
 	ACCESS_HIKE_CHAIN_REG(boot_chain, fp) = HIKE_MEM_CHAIN_STACK_DATA_END;
 
 	/* chain loader instruction; REG_1 will be loaded with the ID of the
 	 * chain id chosen in the bootstrap phase.
 	 */
-	boot_chain->insns[0] = HIKE_CALL_ELEM_NARGS_2_INSN();
+	boot_chain->insns[0] = HIKE_CALL_ELEM_NARGS_1_INSN();
 	boot_chain->insns[1] = HIKE_EXIT_INSN();
 
 	return 0;
@@ -1948,7 +2116,6 @@ hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 {
 	struct hike_chain_data *chain_data;
 	struct hike_chain *cur_chain;
-	struct hike_insn *insn;
 	int rc;
 
 	rc = hike_shared_mem_init();
@@ -1966,11 +2133,6 @@ hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 	cur_chain = __hike_get_active_chain(chain_data);
 	if (unlikely(!cur_chain))
 		return -ENOBUFS;
-
-	/* retrieve the first instruction of the loading chain */
-	insn = __hike_chain_hike_insn_at(cur_chain, 0);
-	if (unlikely(!insn))
-		return -EFAULT;
 
 	/* set the chain ID in register REG_1; that allows the HIKE VM to
 	 * jump into the given chain.
@@ -2009,8 +2171,8 @@ int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)		\
 			    rc);					\
 		return rc;						\
 	}								\
-									\
 	barrier();							\
+	relax_verifier();						\
 	hike_chain_next(ctx);						\
 	/* fallback by default means aborted */				\
 aborted:								\
@@ -2083,6 +2245,9 @@ ___hike_const_export__##constname = { 0, }
 
 #define HVM_RET		HVM_ARG0
 
+#define HVM_PTR(__vaddr, __pptr)					\
+	__hike_virt_to_phys((__vaddr), (__pptr))
+
 /* #########################################################################
  * # API to export the binding between an XDP eBPF/HIKe program and its    #
  * # eBPF maps.                                                            #
@@ -2135,6 +2300,7 @@ __attribute__((section(".hike.maps.export")))				\
 /* ############################## User API ################################# */
 /* ######################################################################### */
 
+#define PTR_TO_U64(__ptr) __to_u64((size_t)(__ptr))
 
 #define UAPI_PCPU_SHMEM_ADDR ((void *)((size_t)HIKE_MEM_PCPU_SHARED_ADDR))
 

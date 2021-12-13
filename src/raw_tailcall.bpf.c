@@ -33,11 +33,15 @@ static __always_inline int
 raw_tlcl_jmp_check_limit(struct xdp_md *ctx, __u32 *loop_var, __u32 depth,
 			 __u32 prog_id)
 {
-	if (*loop_var >= depth)
-		return 0;
-
 	++(*loop_var);
 
+	if (*loop_var >= depth) {
+		DEBUG_PRINT(">>> raw_tlcl_do_stuff NOT tail jumped (depth=%d)",
+			     depth);
+		return 0;
+	}
+
+	DEBUG_PRINT(">>> jump taken %d", *loop_var);
 	bpf_tail_call(ctx, &raw_tlcl_jmp_map, prog_id);
 
 	/* fallthrough */
@@ -62,7 +66,7 @@ int __xdp_raw_tlcl_loader(struct xdp_md *ctx)
 
 	rc = raw_tlcl_jmp_check_limit(ctx, i, TLCL_MAX_DEPTH, prog_id);
 	if (!rc) {
-		DEBUG_PRINT(">>> __xdp_raw_tlcl_do_stuff loop end, exit loop var=%d",
+		DEBUG_PRINT(">>> raw_tlcl_loader loop end, exit loop var=%d",
 			    *i);
 
 		bpf_tail_call(ctx, &raw_tlcl_jmp_map, RAW_TLCL_EBPF_L2XCON);
