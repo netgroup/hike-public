@@ -7,6 +7,7 @@
 /* ######################################################################### */
 
 
+#ifndef __HIKE_CFLAGS_EXTMAKE
 #define HIKE_DEBUG			1
 
 /* eBPF/HIKe Program IDs */
@@ -100,4 +101,7 @@ enum {
 #define RAW_TLCL_EBPF_DO_STUFF		1
 #define RAW_TLCL_EBPF_L2XCON		2
 
+#else /* !__HIKE_CFLAGS_EXTMAKE */
+	/* here if __HIKE_CFLAGS_EXTMAKE is defined */
+#endif
 #endif
