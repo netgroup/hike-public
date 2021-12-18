@@ -2,17 +2,7 @@
 #ifndef _HDR_CURSOR_H
 #define _HDR_CURSOR_H
 
-#define __HDR_CURSOR_BARRIER	0
-
-#ifndef barrier
-#define barrier()	__asm__ __volatile__("": : :"memory")
-#endif
-
-#if __HDR_CURSOR_BARRIER == 0
-#define cur_barrier()	barrier()
-#else
-#define cur_barrier()
-#endif
+#include "compiler.h"
 
 /* header cursor to keep track of current parsing position within the packet */
 struct hdr_cursor {
