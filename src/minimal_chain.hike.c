@@ -430,3 +430,42 @@ out:
 	/* never return from here */
 	return 0;
 }
+
+#define hike_verbose(__cookie) \
+	hike_elem_call_2(HIKE_EBPF_PROG_HIKE_VERBOSE, (__cookie))
+
+#define ipv6_find_udp() hike_elem_call_1(HIKE_EBPF_PROG_IPV6_FND_UDP)
+#ifndef IPPROTO_UDP
+#define IPPROTO_UDP	17
+#endif
+
+HIKE_CHAIN_1(HIKE_CHAIN_EVAL_DELAY_ID)
+{
+	__u8 nexthdr;
+	__s64 rc;
+
+	rc = ipv6_find_udp();
+	if (rc >> 32) {
+		/* UDP not found */
+		if (rc == -ENOENT)
+			goto pass;
+		/* an error occurred during the operation */
+		goto error;
+	}
+
+	nexthdr = rc & 0xff;
+
+	/* do really something here with udp */
+	hike_verbose(nexthdr);
+
+pass:
+	PCPU_MON_INC_ALLOW();
+	packet_pass();
+	goto out;
+error:
+	PCPU_MON_INC_ERROR();
+	PCPU_MON_INC_DROP();
+	packet_drop();
+out:
+	return 0;
+}
