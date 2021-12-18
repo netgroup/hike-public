@@ -445,12 +445,10 @@ HIKE_CHAIN_1(HIKE_CHAIN_EVAL_DELAY_ID)
 	__s64 rc;
 
 	rc = ipv6_find_udp();
-	if (rc >> 32) {
-		/* UDP not found */
+	if (rc < 0) {
 		if (rc == -ENOENT)
-			goto pass;
-		/* an error occurred during the operation */
-		goto error;
+			goto pass;	/* UDP not found */
+		goto error;		/* error during the operation */
 	}
 
 	nexthdr = rc & 0xff;
