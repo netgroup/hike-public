@@ -244,6 +244,7 @@ enum {
 #define HIKE_OR				0X40
 #define	HIKE_LSH			0x60
 #define	HIKE_RSH			0x70
+#define HIKE_XOR			0xa0
 #define HIKE_MOV			0xb0
 
 /* source modifiers */
@@ -1836,6 +1837,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_ALU64 | HIKE_SUB | HIKE_K:
 	case HIKE_ALU64 | HIKE_AND | HIKE_K:
 	case HIKE_ALU64 | HIKE_OR  | HIKE_K:
+	case HIKE_ALU64 | HIKE_XOR | HIKE_K:
 	case HIKE_ALU64 | HIKE_LSH | HIKE_K:
 	case HIKE_ALU64 | HIKE_RSH | HIKE_K:
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
@@ -1856,6 +1858,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		ALU(HIKE_ALU64 | HIKE_SUB | HIKE_K, *reg_ref, -, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_OR  | HIKE_K, *reg_ref, |, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_XOR | HIKE_K, *reg_ref, ^, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_LSH | HIKE_K, *reg_ref, <<, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_RSH | HIKE_K, *reg_ref, >>, imm32, __u64);
 		default:
