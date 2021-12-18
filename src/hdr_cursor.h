@@ -148,9 +148,11 @@ cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur, int off, int len)
 	if (__off < 0 || __off > PROTO_OFF_MAX)
 		return NULL;
 
-	/* to make the verifier happy... */
 	len &= PROTO_OFF_MAX;
 	off &= PROTO_OFF_MAX;
+	/* to make the verifier happy... */
+	barrier_data(len);
+	barrier_data(off);
 
 	/* overflow for the packet */
 	if (!__may_pull(head + off, len, tail))
