@@ -20,13 +20,11 @@
 HIKE_PROG(HIKE_PROG_NAME)
 {
 	struct pkt_info *info = hike_pcpu_shmem();
-	__u64 cookie = HVM_ARG2;
 	struct hdr_cursor *cur;
-	__u64 id = HVM_ARG1;
 	struct udphdr *udph;
 	__u16 dest;
 
-	DEBUG_HKPRG_PRINT("ID=0x%llx cookie=<%d>", id, cookie);
+	DEBUG_HKPRG_PRINT("ID=0x%llx cookie=<%d>", HVM_ARG1, HVM_ARG2);
 
 	if (unlikely(!info))
 		goto abort;
