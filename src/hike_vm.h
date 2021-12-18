@@ -1650,7 +1650,8 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	 * the comiler/optimizer; program won't be verified if we swap the
 	 * following 2 instructions withouth adding some barriers.
 	 */
-	DEBUG_PRINT("HIKe VM debug: exec insn opcode=0x%x", opcode);
+	DEBUG_PRINT("HIKe VM debug: upc=%d,\texec insn opcode=0x%x",
+		    cur_chain->upc, opcode);
 
 	__hike_chain_upc_inc(cur_chain);
 	/* PC now points to PC + 1 */
