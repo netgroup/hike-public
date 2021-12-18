@@ -233,6 +233,7 @@ enum {
 #define HIKE_JSLT			0xc0	/* SLT is signed, '<' */
 #define HIKE_JLE			0xb0	/* <= */
 #define HIKE_JSLE			0xd0	/* SLE is signed, '<=' */
+#define HIKE_JSET			0x40	/* & */
 #define HIKE_CALL			0x80
 #define HIKE_TAIL_CALL			0xf0	/* XXX: deprecated; not used */
 #define HIKE_EXIT			0x90
@@ -1902,6 +1903,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_JMP64 | HIKE_JSLT | HIKE_X:
 	case HIKE_JMP64 | HIKE_JSGE | HIKE_X:
 	case HIKE_JMP64 | HIKE_JSLE | HIKE_X:
+	case HIKE_JMP64 | HIKE_JSET | HIKE_X:
 	/* conditional jump section using immediate */
 	case HIKE_JMP64 | HIKE_JNE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JEQ | HIKE_K:
@@ -1913,6 +1915,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_JMP64 | HIKE_JSLT | HIKE_K:
 	case HIKE_JMP64 | HIKE_JSGE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JSLE | HIKE_K:
+	case HIKE_JMP64 | HIKE_JSET | HIKE_K:
 		offset = insn->hic_off;
 
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
@@ -1940,6 +1943,8 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			  jmp_cond, *reg_ref, <, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_K,
 			  jmp_cond, *reg_ref, <=, imm32, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSET | HIKE_K,
+			  jmp_cond, *reg_ref, &, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JSGT | HIKE_K,
 			  jmp_cond, *reg_ref, >, imm32, __s64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JSGE | HIKE_K,
@@ -1961,6 +1966,8 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			  jmp_cond, *reg_ref, <, reg_val, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_X,
 			  jmp_cond, *reg_ref, <=, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSET | HIKE_X,
+			  jmp_cond, *reg_ref, &, reg_val, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JSGT | HIKE_X,
 			  jmp_cond, *reg_ref, >, reg_val, __s64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JSGE | HIKE_X,
