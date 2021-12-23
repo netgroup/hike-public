@@ -37,7 +37,7 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    hike_pass.bpf.c \
 	    hike_drop.bpf.c \
 	    lse.bpf.c \
-	    l2red.bpf.c \
+	    l2_redirect.bpf.c \
 	    hike_verbose.bpf.c \
 	    ip6_find_udp.bpf.c
 

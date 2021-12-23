@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 
-#define HIKE_PROG_NAME	l2red
+#define HIKE_PROG_NAME	l2_redirect
 
 #include <stddef.h>
 #include <linux/in.h>

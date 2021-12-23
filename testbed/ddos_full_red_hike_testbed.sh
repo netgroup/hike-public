@@ -304,7 +304,7 @@ read -r -d '' sut_env <<-EOF
 
 	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1f 00 00 00					\
-		value	pinned /sys/fs/bpf/progs/l2red/hvxdp_l2red
+		value	pinned /sys/fs/bpf/progs/l2red/hvxdp_l2_redirect
 
 	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 11 00 00 00					\
