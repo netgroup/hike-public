@@ -1,8 +1,6 @@
 #ifndef _IPV6_HSET_H
 #define _IPV6_HSET_H
 
-
-
 #include <stddef.h>
 #include <linux/in.h>
 #include <linux/if_ether.h>
@@ -18,8 +16,8 @@
 // expiration timer for the blacklist
 #define HIKE_IPV6_HSET_EXP_TIMEOUT_NS 	10000000000ul /* 0 secs */
 
-#define	IPV6_HSET_ACTION_LOOKUP			      0
-#define	IPV6_HSET_ACTION_ADD			        1
+#define	IPV6_HSET_ACTION_LOOKUP			    0
+#define	IPV6_HSET_ACTION_ADD			    1
 #define	IPV6_HSET_ACTION_LOOKUP_AND_CLEAN	2
 
 struct ipv6_hset_srcdst_key {
