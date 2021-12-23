@@ -12,7 +12,7 @@
 #include <linux/errno.h>
 
 /* HIKe Chain IDs and XDP eBPF/HIKe programs IDs */
-#include "minimal.h"
+//#include "minimal.h"
 
 #include "hike_vm.h"
 #include "parse_helpers.h"
@@ -21,7 +21,7 @@
 #include "ip6_hset.h"
 
 #define HIKE_HSET_PROG_NAME	HIKE_PROG_NAME
-#define HIKE_HSET_MAP_NAME	ipv6_hset_srcdst_map
+#define HIKE_HSET_MAP_NAME	ipv6_hset_sd_map
 
 bpf_map(HIKE_HSET_MAP_NAME,
 	HASH,
@@ -32,7 +32,7 @@ bpf_map(HIKE_HSET_MAP_NAME,
 static __always_inline struct ipv6_hset_value *
 ipv6_hset_srcdst_get_value(struct ipv6_hset_srcdst_key *key)
 {
-	return bpf_map_lookup_elem(&ipv6_hset_srcdst_map, key);
+	return bpf_map_lookup_elem(&HIKE_HSET_MAP_NAME, key);
 }
 
 static __always_inline int
@@ -49,14 +49,14 @@ ipv6_hset_srcdst_add_key(struct ipv6_hset_srcdst_key *key)
 	val.timeout_ns = HIKE_IPV6_HSET_EXP_TIMEOUT_NS;
 	val.cts_ns = bpf_ktime_get_ns();
 
-	return bpf_map_update_elem(&ipv6_hset_srcdst_map, key, &val,
+	return bpf_map_update_elem(&HIKE_HSET_MAP_NAME, key, &val,
 				   BPF_NOEXIST);
 }
 
 static __always_inline int
 ipv6_hset_srcdst_del_key(struct ipv6_hset_srcdst_key *key)
 {
-	return bpf_map_delete_elem(&ipv6_hset_srcdst_map, key);
+	return bpf_map_delete_elem(&HIKE_HSET_MAP_NAME, key);
 }
 
 static __always_inline int
