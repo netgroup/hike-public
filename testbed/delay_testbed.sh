@@ -16,7 +16,7 @@
 #                                               |                |
 #                                               |    COLLECTOR   |
 #                                               +----------------+
-						
+
 
 
 TMUX=ebpf
@@ -251,6 +251,30 @@ read -r -d '' sut_env <<-EOF
 		map name map_app_cfg					\
 			pinned /sys/fs/bpf/maps/appcfg/map_app_cfg
 
+	mkdir -p /sys/fs/bpf/{progs/ip6_fndudp,maps/ip6_fndudp}
+	bpftool prog loadall ip6_find_udp.o /sys/fs/bpf/progs/ip6_fndudp type xdp \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
+		pinmaps /sys/fs/bpf/maps/ip6_fndudp
+
+	mkdir -p /sys/fs/bpf/{progs/hike_verb,maps/hike_verb}
+	bpftool prog loadall hike_verbose.o /sys/fs/bpf/progs/hike_verb type xdp \
+		map name hvm_hprog_map					\
+			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
+		map name hvm_chain_map					\
+			pinned /sys/fs/bpf/maps/init/hvm_chain_map 	\
+		map name hvm_cdata_map			\
+			pinned /sys/fs/bpf/maps/init/hvm_cdata_map \
+		map name hvm_shmem_map				\
+			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
+		pinmaps /sys/fs/bpf/maps/hike_verb
+
 	# NOT an HIKe eBPF Program
 	mkdir -p /sys/fs/bpf/{progs/rawpass,}
 	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rawpass type xdp
@@ -310,6 +334,14 @@ read -r -d '' sut_env <<-EOF
 		key	hex 11 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/appcfg/hvxdp_app_cfg_load
 
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+		key	hex 20 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/ip6_fndudp/hvxdp_ipv6_find_udp
+
+	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+		key	hex 21 00 00 00					\
+		value	pinned /sys/fs/bpf/progs/hike_verb/hvxdp_hike_verbose
+
 	# =================================================================== #
 
 
@@ -332,7 +364,7 @@ read -r -d '' sut_env <<-EOF
 	bpftool map update \
 		pinned /sys/fs/bpf/maps/init/ipv6_simple_classifier_map \
 		key hex		00 00 00 00				\
-		value hex 	57 00 00 40
+		value hex 	58 00 00 40
 
 	# Program the IPv6 <src,dst> hashset
 	# bpftool map update \

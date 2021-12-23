@@ -11,8 +11,25 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 
+#include "compiler.h"
 #include "hike_vm_common.h"
+
 #include "map.h"
+
+
+/* HIKE VM extern macros
+ * =====================
+ */
+
+#ifndef HIKE_DEBUG
+#define HIKE_DEBUG		0
+#endif
+
+#ifndef HIKE_VM_VERCOMP_LEVEL
+#define HIKE_VM_VERCOMP_LEVEL	1
+#endif
+
+/* --- */
 
 /* TODO: move in hike_vm_common.h ? */
 typedef __u8	bool;
@@ -37,61 +54,12 @@ typedef __u8	bool;
 
 #define __hike_vm_section_tail(KEY)	__section_tail(HIKE_VM_PROG_SEC, KEY) 
 
-#ifndef barrier
-#define barrier()	__asm__ __volatile__("": : :"memory")
-#endif
 
-#ifndef likely
-#define likely(x)	__builtin_expect(!!(x), 1)
+#if HIKE_VM_VERCOMP_LEVEL > 0
+#define relax_verifier_vc()	relax_verifier()
+#else
+#define relax_verifier_vc()	do { } while (0)
 #endif
-
-#ifndef unlikely
-#define unlikely(x)	__builtin_expect(!!(x), 0)
-#endif
-
-#ifndef __maybe_unused
-#define __maybe_unused		__attribute__((__unused__))
-#endif
-
-#ifndef __READ_ONCE
-#define __READ_ONCE(X)		(*(volatile typeof(X) *)&X)
-#endif
-
-#ifndef __WRITE_ONCE
-#define __WRITE_ONCE(X, V)	(*(volatile typeof(X) *)&X) = (V)
-#endif
-
-/* {READ,WRITE}_ONCE() with verifier workaround via (bpf_)barrier(). */
-
-#ifndef READ_ONCE
-#define READ_ONCE(X)						\
-({								\
-	typeof(X) __val = __READ_ONCE(X);			\
-	barrier();						\
-	__val;							\
-})
-#endif
-
-#ifndef WRITE_ONCE
-#define WRITE_ONCE(X, V)					\
-({								\
-	typeof(X) __val = (V);					\
-	__WRITE_ONCE(X, __val);					\
-	barrier();						\
-	__val;							\
-})
-#endif
-
-/* relax_verifier is a dummy helper call to introduce a pruning checkpoint to
- * help relax the verifier to avoid reaching complexity limits on older
- * kernels.
- */
-static __always_inline void relax_verifier(void)
-{
-#ifndef HAVE_LARGE_INSN_LIMIT
-       volatile int __maybe_unused id = bpf_get_smp_processor_id();
-#endif
-}
 
 /* the total number of different programs that can be used */
 #define GEN_PROG_TABLE_SIZE		256
@@ -103,10 +71,6 @@ static __always_inline void relax_verifier(void)
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-
-#ifndef HIKE_DEBUG
-#define HIKE_DEBUG 1
-#endif
 
 #if HIKE_DEBUG == 1
 #define DEBUG_PRINT(...)					\
@@ -261,10 +225,15 @@ enum {
 #define HIKE_JA				0x00
 #define	HIKE_JEQ			0x10	/* == */
 #define	HIKE_JGT			0x20	/* >  */
+#define HIKE_JSGT			0x60	/* SGT is signed, '>' */
 #define	HIKE_JGE			0x30	/* >= */
+#define HIKE_JSGE			0x70	/* SGE is signed, '>=' */
 #define	HIKE_JNE			0x50	/* != */
 #define HIKE_JLT			0xa0	/* <  */
+#define HIKE_JSLT			0xc0	/* SLT is signed, '<' */
 #define HIKE_JLE			0xb0	/* <= */
+#define HIKE_JSLE			0xd0	/* SLE is signed, '<=' */
+#define HIKE_JSET			0x40	/* & */
 #define HIKE_CALL			0x80
 #define HIKE_TAIL_CALL			0xf0	/* XXX: deprecated; not used */
 #define HIKE_EXIT			0x90
@@ -276,6 +245,7 @@ enum {
 #define HIKE_OR				0X40
 #define	HIKE_LSH			0x60
 #define	HIKE_RSH			0x70
+#define HIKE_XOR			0xa0
 #define HIKE_MOV			0xb0
 
 /* source modifiers */
@@ -1651,8 +1621,8 @@ static __always_inline int
 __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 				  struct hike_chain_done_insn_bottom *out)
 {
+	struct hike_insn *insn, __insn;
 	struct hike_chain *cur_chain;
-	struct hike_insn *insn;
 	__u64 *reg_ref;
 	__u64 reg_val;
 	__u8 jmp_cond;
@@ -1672,26 +1642,32 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	if (unlikely(!insn))
 		return -EFAULT;
 
+	/* trick for the compiler/optimizer */
+	WRITE_ONCE(__insn, *insn);
+	WRITE_ONCE(insn, &__insn);
+
 	opcode = insn->hic_code;
 
 	/* order of instructions here is important due to optimization done by
 	 * the comiler/optimizer; program won't be verified if we swap the
 	 * following 2 instructions withouth adding some barriers.
 	 */
-	DEBUG_PRINT("HIKe VM debug: exec insn opcode=0x%x", opcode);
+	DEBUG_PRINT("HIKe VM debug: upc=%d,\texec insn opcode=0x%x",
+		    cur_chain->upc, opcode);
 
 	__hike_chain_upc_inc(cur_chain);
 	/* PC now points to PC + 1 */
 
+	/* relax the verifier by inserting a call to a "nop" helper function.
+	 * Note that the relax verifier (vc stands for verifier compatibility) is
+	 * turned on only if HIKE_VM_VERCOMP_LEVEL > 0 .
+	 */
+	relax_verifier_vc();
+
 	/* good opcode descriptions are reported here:
 	 * https://github.com/iovisor/bpf-docs/blob/master/eBPF.md
 	 */
-
-	/* relax the verifier by inserting a call to a "nop" helper function */
-	relax_verifier();
-
 	switch (opcode) {
-
 	/* convert endianess of a register */
 	case HIKE_ALU | HIKE_END | HIKE_TO_BE:
 	case HIKE_ALU | HIKE_END | HIKE_TO_LE:
@@ -1862,6 +1838,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_ALU64 | HIKE_SUB | HIKE_K:
 	case HIKE_ALU64 | HIKE_AND | HIKE_K:
 	case HIKE_ALU64 | HIKE_OR  | HIKE_K:
+	case HIKE_ALU64 | HIKE_XOR | HIKE_K:
 	case HIKE_ALU64 | HIKE_LSH | HIKE_K:
 	case HIKE_ALU64 | HIKE_RSH | HIKE_K:
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
@@ -1882,6 +1859,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		ALU(HIKE_ALU64 | HIKE_SUB | HIKE_K, *reg_ref, -, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_OR  | HIKE_K, *reg_ref, |, imm32, __u64);
+		ALU(HIKE_ALU64 | HIKE_XOR | HIKE_K, *reg_ref, ^, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_LSH | HIKE_K, *reg_ref, <<, imm32, __u64);
 		ALU(HIKE_ALU64 | HIKE_RSH | HIKE_K, *reg_ref, >>, imm32, __u64);
 		default:
@@ -1921,6 +1899,11 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_JMP64 | HIKE_JGE | HIKE_X:
 	case HIKE_JMP64 | HIKE_JLT | HIKE_X:
 	case HIKE_JMP64 | HIKE_JLE | HIKE_X:
+	case HIKE_JMP64 | HIKE_JSGT | HIKE_X:
+	case HIKE_JMP64 | HIKE_JSLT | HIKE_X:
+	case HIKE_JMP64 | HIKE_JSGE | HIKE_X:
+	case HIKE_JMP64 | HIKE_JSLE | HIKE_X:
+	case HIKE_JMP64 | HIKE_JSET | HIKE_X:
 	/* conditional jump section using immediate */
 	case HIKE_JMP64 | HIKE_JNE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JEQ | HIKE_K:
@@ -1928,6 +1911,11 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case HIKE_JMP64 | HIKE_JGE | HIKE_K:
 	case HIKE_JMP64 | HIKE_JLT | HIKE_K:
 	case HIKE_JMP64 | HIKE_JLE | HIKE_K:
+	case HIKE_JMP64 | HIKE_JSGT | HIKE_K:
+	case HIKE_JMP64 | HIKE_JSLT | HIKE_K:
+	case HIKE_JMP64 | HIKE_JSGE | HIKE_K:
+	case HIKE_JMP64 | HIKE_JSLE | HIKE_K:
+	case HIKE_JMP64 | HIKE_JSET | HIKE_K:
 		offset = insn->hic_off;
 
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
@@ -1955,6 +1943,16 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			  jmp_cond, *reg_ref, <, imm32, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_K,
 			  jmp_cond, *reg_ref, <=, imm32, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSET | HIKE_K,
+			  jmp_cond, *reg_ref, &, imm32, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSGT | HIKE_K,
+			  jmp_cond, *reg_ref, >, imm32, __s64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSGE | HIKE_K,
+			  jmp_cond, *reg_ref, >=, imm32, __s64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSLT | HIKE_K,
+			  jmp_cond, *reg_ref, <, imm32, __s64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSLE | HIKE_K,
+			  jmp_cond, *reg_ref, <=, imm32, __s64);
 		/* ============================================= */
 		COND_JUMP(HIKE_JMP64 | HIKE_JEQ | HIKE_X,
 			  jmp_cond, *reg_ref, ==, reg_val, __u64);
@@ -1968,6 +1966,16 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			  jmp_cond, *reg_ref, <, reg_val, __u64);
 		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_X,
 			  jmp_cond, *reg_ref, <=, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSET | HIKE_X,
+			  jmp_cond, *reg_ref, &, reg_val, __u64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSGT | HIKE_X,
+			  jmp_cond, *reg_ref, >, reg_val, __s64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSGE | HIKE_X,
+			  jmp_cond, *reg_ref, >=, reg_val, __s64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSLT | HIKE_X,
+			  jmp_cond, *reg_ref, <, reg_val, __s64);
+		COND_JUMP(HIKE_JMP64 | HIKE_JSLE | HIKE_X,
+			  jmp_cond, *reg_ref, <=, reg_val, __s64);
 		default:
 			return -EFAULT;
 		}

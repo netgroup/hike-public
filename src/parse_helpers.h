@@ -17,7 +17,30 @@
 
 #include "hdr_cursor.h"
 
+
 #define PKT_INFO_CB_SIZE	48
+
+/* NextHeader field of IPv6 header
+ * see: https://elixir.bootlin.com/linux/latest/source/include/net/ipv6.h#L32
+ */
+
+#define NEXTHDR_HOP		0	/* Hop-by-hop option header. */
+#define NEXTHDR_IPV4		4	/* IPv4 in IPv6 */
+#define NEXTHDR_TCP		6	/* TCP segment. */
+#define NEXTHDR_UDP		17	/* UDP message. */
+#define NEXTHDR_IPV6		41	/* IPv6 in IPv6 */
+#define NEXTHDR_ROUTING		43	/* Routing header. */
+#define NEXTHDR_FRAGMENT	44	/* Fragmentation/reassembly header. */
+#define NEXTHDR_GRE		47	/* GRE header. */
+#define NEXTHDR_ESP		50	/* Encapsulating security payload. */
+#define NEXTHDR_AUTH		51	/* Authentication header. */
+#define NEXTHDR_ICMP		58	/* ICMP for IPv6. */
+#define NEXTHDR_NONE		59	/* No next header */
+#define NEXTHDR_DEST		60	/* Destination options header. */
+#define NEXTHDR_SCTP		132	/* SCTP message. */
+#define NEXTHDR_MOBILITY	135	/* Mobility header. */
+
+#define NEXTHDR_MAX		255
 
 struct pkt_info {
 	struct hdr_cursor cur;
@@ -134,6 +157,61 @@ parse_ip6hdr(struct xdp_md *ctx, struct hdr_cursor *cur,
 	cur_pull(ctx, cur, sizeof(*ip6h));
 
 	return ip6h->nexthdr;
+}
+
+#define ipv6_optlen(p)  (((p)->hdrlen+1) << 3)
+#define ipv6_authlen(p) (((p)->hdrlen+2) << 2)
+
+static __always_inline int ipv6_ext_hdr(__u8 nexthdr)
+{
+	/* find out if nexthdr is an extension header or a protocol */
+	return   (nexthdr == NEXTHDR_HOP)	||
+		 (nexthdr == NEXTHDR_ROUTING)	||
+		 (nexthdr == NEXTHDR_FRAGMENT)	||
+		 (nexthdr == NEXTHDR_AUTH)	||
+		 (nexthdr == NEXTHDR_NONE)	||
+		 (nexthdr == NEXTHDR_DEST);
+}
+
+#ifndef IPV6_EXTHDR_DEPTH_MAX
+#define IPV6_EXTHDR_DEPTH_MAX	4
+#endif
+
+static __always_inline int
+ipv6_skip_exthdr(struct xdp_md *ctx, struct hdr_cursor *cur, int *start,
+		 __u8 *nexthdrp)
+{
+	struct ipv6_opt_hdr *hdr;
+	__u8 nexthdr = *nexthdrp;
+	int i, hdrlen;
+
+	for (i = 0; i < IPV6_EXTHDR_DEPTH_MAX; ++i) {
+		if (!ipv6_ext_hdr(nexthdr)) {
+			*nexthdrp = nexthdr;
+			return nexthdr;
+		}
+
+		if (nexthdr == NEXTHDR_NONE)
+			return -EPERM;
+		if (nexthdr == NEXTHDR_FRAGMENT)
+			return -EOPNOTSUPP;
+
+		hdr = (struct ipv6_opt_hdr *)cur_header_pointer(ctx, cur,
+								*start,
+								sizeof(*hdr));
+		if (!hdr)
+			return -EINVAL;
+
+		if (nexthdr == NEXTHDR_AUTH)
+			hdrlen = ipv6_authlen(hdr);
+		else
+			hdrlen = ipv6_optlen(hdr);
+
+		nexthdr = hdr->nexthdr;
+		*start += hdrlen;
+	}
+
+	return -ELOOP;
 }
 
 #endif /* end of #ifdef for include header file */
