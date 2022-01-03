@@ -42,6 +42,12 @@
 
 #define NEXTHDR_MAX		255
 
+enum {
+	IP6_FH_F_FRAG		= (1 << 0),
+	IP6_FH_F_AUTH		= (1 << 1),
+	IP6_FH_F_SKIP_RH	= (1 << 2),
+};
+
 struct pkt_info {
 	struct hdr_cursor cur;
 	__u8 cb[PKT_INFO_CB_SIZE];
@@ -212,6 +218,112 @@ ipv6_skip_exthdr(struct xdp_md *ctx, struct hdr_cursor *cur, int *start,
 	}
 
 	return -ELOOP;
+}
+
+/*
+ * find the offset to specified header or the protocol number of last header
+ * if target < 0. "last header" is transport protocol header, ESP, or
+ * "No next header".
+ *
+ * Note that *offset is used as input/output parameter, and if it is not zero,
+ * then it must be a valid offset to an inner IPv6 header. This can be used
+ * to explore inner IPv6 header, eg. ICMPv6 error messages.
+ * If *offset is zero, then the header cursor Network Offset (hdr_cursor->nhoff)
+ * must be a valid offset pointing to the IPv6 Header.
+ *
+ * If target header is found, its offset is set in *offset and return protocol
+ * number. Otherwise, return -ENOENT.
+ *
+ * If the first fragment doesn't contain the final protocol header or
+ * NEXTHDR_NONE it is considered invalid.
+ *
+ * IP6_FH_F_AUTH flag is set and target < 0, then this function will
+ * stop at the AH header.
+ * If IP6_FH_F_SKIP_RH flag was passed, then this function will skip all those
+ * routing headers, where segments_left was 0.
+ *
+ * ---
+ *
+ * NOTE: fragment header is not supported yet.
+ *
+ * NOTE: while searching for target header, the max depth (number of examined
+ * protocols) is set to IPV6_EXTHDR_DEPTH_MAX. If the max depth limit is
+ * reached before the target header is found, then return -ELOOP.
+ */
+static __always_inline int
+ipv6_find_hdr(struct xdp_md *ctx, struct hdr_cursor *cur, int *offset,
+	      int target, unsigned short *fragoff, int *flags)
+{
+#define __PTRHDR cur_header_pointer
+	unsigned int start = *offset ?: cur->nhoff;
+	struct ipv6_opt_hdr *hp;
+	struct ipv6hdr *ip6h;
+	unsigned int hdrlen;
+	__u8 nexthdr;
+	__u8 found;
+	int i = 0;
+
+	ip6h = (struct ipv6hdr *)__PTRHDR(ctx, cur, start, sizeof(*ip6h));
+	if (unlikely(!ip6h || ip6h->version != 6))
+		return -EBADMSG;
+
+	nexthdr = ip6h->nexthdr;
+	start += sizeof(*ip6h);
+
+	do {
+		found = (nexthdr == target);
+
+		if (!ipv6_ext_hdr(nexthdr) || nexthdr == NEXTHDR_NONE) {
+			if (target < 0 || found)
+				break;
+
+			return -ENOENT;
+		}
+
+		hp = (struct ipv6_opt_hdr *)__PTRHDR(ctx, cur, start,
+						     sizeof(*hp));
+		if (unlikely(!hp))
+			return -EBADMSG;
+
+		if (nexthdr == NEXTHDR_ROUTING) {
+			struct ipv6_rt_hdr *rh;
+
+			rh = (struct ipv6_rt_hdr *)__PTRHDR(ctx, cur, start,
+							    sizeof(*rh));
+			if (unlikely(!rh))
+				return -EBADMSG;
+
+			if (flags && (*flags & IP6_FH_F_SKIP_RH) &&
+			    rh->segments_left == 0)
+				found = 0;
+		}
+
+		if (nexthdr == NEXTHDR_FRAGMENT) {
+			/* TODO: unsupported for the moment */
+			return -EOPNOTSUPP;
+		} else if (nexthdr == NEXTHDR_AUTH) {
+			if (flags && (*flags & IP6_FH_F_AUTH) && target < 0)
+				break;
+
+			hdrlen = ipv6_authlen(hp);
+		} else {
+			hdrlen = ipv6_optlen(hp);
+		}
+
+		if (!found) {
+			nexthdr = hp->nexthdr;
+			start += hdrlen;
+		}
+
+		/* check for the max depth; bound the loop in the worst case */
+		if (unlikely(i >= IPV6_EXTHDR_DEPTH_MAX))
+			return -ELOOP;
+		++i;
+	} while (!found);
+
+	*offset = start;
+	return nexthdr;
+#undef __PTRHDR
 }
 
 #endif /* end of #ifdef for include header file */
