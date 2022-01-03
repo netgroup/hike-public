@@ -86,8 +86,9 @@ check_udp:
 	if (final)
 		goto not_found;
 
-	/* thoff is set after IPv6 and at the beginning of the l4 (which can be
-	 * considered as ext headers.
+	/* we assume that thoff is set after IPv6 and at the beginning of the 
+	 * first header after the base IPv6 header
+	 * this program does not change thoff
 	 */
 	start = cur->thoff;
 	rc = ipv6_skip_exthdr(ctx, cur, &start, &nexthdr);
