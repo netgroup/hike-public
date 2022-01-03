@@ -710,6 +710,11 @@ static __u64 (* hike_elem_call_2) (__u32 id, __u64 arg1) =
 static __u64 (* hike_elem_call_3) (__u32 id,__u64 arg1, __u64 arg2) =
 	(void *)HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_3_ID);
 
+#define __HIKE_HPFUNC_CALL_ELEM_NARGS_4_ID		0x14
+static __u64 (* hike_elem_call_4) (__u32 id,__u64 arg1,
+				   __u64 arg2, __u64 arg3) =
+	(void *)HIKE_HPFUNC_ADDR(__HIKE_HPFUNC_CALL_ELEM_NARGS_4_ID);
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MAP DEFINITIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 /* HIKe VM execution context */
@@ -1560,6 +1565,9 @@ int __hike_elem_call_insn(struct hike_chain_data *chain_data,
 	int rc;
 
 	switch (func_id) {
+	case __HIKE_HPFUNC_CALL_ELEM_NARGS_4_ID:
+		++nargs;
+		/* fallthrough */
 	case __HIKE_HPFUNC_CALL_ELEM_NARGS_3_ID:
 		++nargs;
 		/* fallthrough */
@@ -2014,6 +2022,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		imm32 = (__s32)HIKE_HPFUNC_ID(insn->imm);
 
 		switch (imm32) {
+		case __HIKE_HPFUNC_CALL_ELEM_NARGS_4_ID:
 		case __HIKE_HPFUNC_CALL_ELEM_NARGS_3_ID:
 		case __HIKE_HPFUNC_CALL_ELEM_NARGS_2_ID:
 		case __HIKE_HPFUNC_CALL_ELEM_NARGS_1_ID:
@@ -2221,6 +2230,14 @@ __DEF_HIKE_PROG_SIGNATURE_FUNC(SIGNATURE, TA1 A1, TA2 A2, TA3 A3)
 #define EXPORT_HIKE_PROG_2(progname, TA1, A1)				\
 	__EXPORT_HIKE_PROG(progname, EXPORT_HIKE_PROG_SIGNATURE_2,	\
 			   TA1, A1)
+
+#define EXPORT_HIKE_PROG_3(progname, TA1, A1, TA2, A2)			\
+	__EXPORT_HIKE_PROG(progname, EXPORT_HIKE_PROG_SIGNATURE_3,	\
+			   TA1, A1, TA2, A2)
+
+#define EXPORT_HIKE_PROG_4(progname, TA1, A1, TA2, A2, TA3, A3)		\
+	__EXPORT_HIKE_PROG(progname, EXPORT_HIKE_PROG_SIGNATURE_4,	\
+			   TA1, A1, TA2, A2, TA3, A3)
 
 #define HIKE_PROG(progname)						\
 static __always_inline int progname(struct xdp_md *ctx,			\
