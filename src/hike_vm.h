@@ -2270,8 +2270,11 @@ ___hike_const_export__##constname = { 0, }
 
 #define HVM_RET		HVM_ARG0
 
-#define HVM_PTR(__vaddr, __pptr)					\
+#define HVM_PTR_RAW(__vaddr, __pptr)					\
 	__hike_virt_to_phys((__vaddr), (__pptr))
+
+#define HVM_PTR(__vaddr, __pptr)					\
+	HVM_PTR_RAW(__to_u32(__vaddr), __pptr)
 
 /* #########################################################################
  * # API to export the binding between an XDP eBPF/HIKe program and its    #
