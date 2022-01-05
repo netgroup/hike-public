@@ -1845,16 +1845,21 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 									\
 	__rc;								\
 })
+
+#define __HIKE_ALU64(OP)						\
+	      (HIKE_ALU64 | (OP) | HIKE_K):				\
+	 case (HIKE_ALU64 | (OP) | HIKE_X)
+
 	/* ALU arithmetic  */
-	case HIKE_ALU64 | HIKE_ADD | HIKE_K:
-	case HIKE_ALU64 | HIKE_SUB | HIKE_K:
-	case HIKE_ALU64 | HIKE_MUL | HIKE_K:
-	case HIKE_ALU64 | HIKE_DIV | HIKE_K:
-	case HIKE_ALU64 | HIKE_AND | HIKE_K:
-	case HIKE_ALU64 | HIKE_OR  | HIKE_K:
-	case HIKE_ALU64 | HIKE_XOR | HIKE_K:
-	case HIKE_ALU64 | HIKE_LSH | HIKE_K:
-	case HIKE_ALU64 | HIKE_RSH | HIKE_K:
+	case __HIKE_ALU64(HIKE_ADD):
+	case __HIKE_ALU64(HIKE_SUB):
+	case __HIKE_ALU64(HIKE_MUL):
+	case __HIKE_ALU64(HIKE_DIV):
+	case __HIKE_ALU64(HIKE_AND):
+	case __HIKE_ALU64(HIKE_OR):
+	case __HIKE_ALU64(HIKE_XOR):
+	case __HIKE_ALU64(HIKE_LSH):
+	case __HIKE_ALU64(HIKE_RSH):
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
 		if (rc < 0)
 			return rc;
@@ -1864,24 +1869,30 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		DST = ((TYPE)DST) OP ((TYPE)SRC);			\
 		break
 
+#define ALUKX_SE(OPCODE, OP, TYPE)					\
+	ALU(((OPCODE) | HIKE_K), *reg_ref, OP, imm32, TYPE);		\
+	ALU(((OPCODE) | HIKE_X), *reg_ref, OP, reg_val, TYPE)		\
+
 		/* apply DST = DST OP SRC/imm
 		 * for more details about type conversion:
 		 * https://elixir.bootlin.com/linux/latest/source/kernel/bpf/core.c#L1433
 		 */
 		switch (opcode) {
-		ALU(HIKE_ALU64 | HIKE_ADD | HIKE_K, *reg_ref, +, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_SUB | HIKE_K, *reg_ref, -, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_MUL | HIKE_K, *reg_ref, *, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_DIV | HIKE_K, *reg_ref, /, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_OR  | HIKE_K, *reg_ref, |, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_XOR | HIKE_K, *reg_ref, ^, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_LSH | HIKE_K, *reg_ref, <<, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_RSH | HIKE_K, *reg_ref, >>, imm32, __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_ADD, +,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_SUB, -,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_MUL, *,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_DIV, /,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_AND, &,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_OR,  |,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_XOR, ^,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_LSH, <<, __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_RSH, >>, __u64);
 		default:
 			return -EFAULT;
 		}
+#undef ALUKX_SE
 #undef ALU
+#undef __HIKE_ALU64
 
 		break;
 
