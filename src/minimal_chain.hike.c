@@ -413,7 +413,7 @@ redirect:
 
 	/* let's load the collector oif from the app config HIKe eBPF Program */
 	rc = app_cfg_load(HIKE_APP_CFG_KEY_COLLECTOR_OIF);
-	if (rc >> 32)
+	if (rc < 0)
 		goto error;
 
 	/* lower 32 bits contain the oif */
