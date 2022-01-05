@@ -1820,27 +1820,29 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 #define ___ALU_LOAD_REGS_SIDE_EFFECT___()				\
 ({									\
 	dst_reg = insn->hic_dst;					\
+	int __rc;							\
 									\
 	/* select the source: src register or immediate */		\
 	switch (HIKE_SRC(opcode)) {					\
 	case HIKE_K:							\
 		imm32 = insn->imm;					\
-		rc = 0;							\
+		__rc = 0;						\
 		break;							\
 	case HIKE_X:							\
 		src_reg = insn->hic_src;				\
-		rc = __hike_chain_load_reg(cur_chain, src_reg,		\
-					   &reg_val);			\
+		__rc = __hike_chain_load_reg(cur_chain, src_reg,	\
+					     &reg_val);			\
 		break;							\
 	default:							\
-		rc = -EFAULT;						\
+		__rc = -EFAULT;						\
 		break;							\
 	}								\
 									\
-	if (likely(!rc))						\
-		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);\
+	if (likely(!__rc))						\
+		__rc = __hike_chain_ref_reg(cur_chain, dst_reg,		\
+					    &reg_ref);			\
 									\
-	rc;								\
+	__rc;								\
 })
 	/* ALU arithmetic  */
 	case HIKE_ALU64 | HIKE_ADD | HIKE_K:
