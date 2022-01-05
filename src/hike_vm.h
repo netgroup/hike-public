@@ -247,6 +247,7 @@ enum {
 #define HIKE_OR				0X40
 #define	HIKE_LSH			0x60
 #define	HIKE_RSH			0x70
+#define HIKE_MOD			0x90
 #define HIKE_XOR			0xa0
 #define HIKE_MOV			0xb0
 
@@ -1860,6 +1861,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 	case __HIKE_ALU64(HIKE_XOR):
 	case __HIKE_ALU64(HIKE_LSH):
 	case __HIKE_ALU64(HIKE_RSH):
+	case __HIKE_ALU64(HIKE_MOD):
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
 		if (rc < 0)
 			return rc;
@@ -1887,6 +1889,7 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		ALUKX_SE(HIKE_ALU64 | HIKE_XOR, ^,  __u64);
 		ALUKX_SE(HIKE_ALU64 | HIKE_LSH, <<, __u64);
 		ALUKX_SE(HIKE_ALU64 | HIKE_RSH, >>, __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_MOD, %,  __u64);
 		default:
 			return -EFAULT;
 		}
