@@ -247,6 +247,7 @@ enum {
 #define HIKE_OR				0X40
 #define	HIKE_LSH			0x60
 #define	HIKE_RSH			0x70
+#define HIKE_NEG			0x80
 #define HIKE_MOD			0x90
 #define HIKE_XOR			0xa0
 #define HIKE_MOV			0xb0
@@ -1919,6 +1920,21 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			return -EFAULT;
 		}
 #undef ALU_MOV
+
+		break;
+
+	/* dst = -dst
+	 * note that HIKE_X bit is not set in this instruction: the HIKE_NEG
+	 * only operates on dst register.
+	 */
+	case HIKE_ALU64 | HIKE_NEG:
+		dst_reg = insn->hic_dst;
+
+		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
+		if (rc < 0)
+			return rc;
+
+		*reg_ref = -(*reg_ref);
 
 		break;
 
