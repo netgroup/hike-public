@@ -251,6 +251,7 @@ enum {
 #define HIKE_MOD			0x90
 #define HIKE_XOR			0xa0
 #define HIKE_MOV			0xb0
+#define HIKE_ARSH			0xc0
 
 /* source modifiers */
 #define HIKE_SRC(code)			((code) & 0x08)
@@ -1897,6 +1898,26 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 #undef ALUKX_SE
 #undef ALU
 #undef __HIKE_ALU64
+
+		break;
+
+	/* dst >>= {reg,imm} (arithmetic) */
+	case HIKE_ALU64 | HIKE_ARSH | HIKE_K:
+	case HIKE_ALU64 | HIKE_ARSH | HIKE_X:
+		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
+		if (rc < 0)
+			return rc;
+
+		switch (opcode) {
+		case HIKE_ALU64 | HIKE_ARSH | HIKE_K:
+			(*(__s64 *)reg_ref) >>= imm32;
+			break;
+		case HIKE_ALU64 | HIKE_ARSH | HIKE_X:
+			(*(__s64 *)reg_ref) >>= (reg_val & 63);
+			break;
+		default:
+			return -EFAULT;
+		}
 
 		break;
 
