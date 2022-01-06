@@ -243,8 +243,8 @@ enum {
 #define HIKE_SUB			0x10
 #define HIKE_MUL			0x20
 #define HIKE_DIV			0x30
-#define HIKE_AND			0x50
 #define HIKE_OR				0X40
+#define HIKE_AND			0x50
 #define	HIKE_LSH			0x60
 #define	HIKE_RSH			0x70
 #define HIKE_NEG			0x80
