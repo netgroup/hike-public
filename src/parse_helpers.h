@@ -8,6 +8,7 @@
 #include <linux/if_packet.h>
 #include <linux/ipv6.h>
 #include <linux/seg6.h>
+#include <linux/udp.h>
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/errno.h>
@@ -324,6 +325,107 @@ ipv6_find_hdr(struct xdp_md *ctx, struct hdr_cursor *cur, int *offset,
 	*offset = start;
 	return nexthdr;
 #undef __PTRHDR
+}
+
+#ifndef IPV6_UDP_MAX_LEN
+#define IPV6_UDP_MAX_LEN	1460
+#endif
+
+static __always_inline void
+ipv6_addr_sum(__be32 *sum, const struct in6_addr *const addr)
+{
+	const __be16 *const p = (const __be16 *const )addr->in6_u.u6_addr16;
+	int i;
+
+#pragma unroll
+	for (i = 0; i < 8; ++i)
+		*sum += p[i];
+}
+
+static __always_inline int
+ipv6_payload_sum(__be32 *sum, const __be16 *const buf, unsigned int len,
+		 const void *end)
+{
+	const unsigned int len_aligned = len & (unsigned int)~1;
+	const __be16 *p = (const __be16 *)buf;
+	int i;
+
+	if (unlikely(len > IPV6_UDP_MAX_LEN))
+		return -ENOBUFS;
+
+	/* aligned 16-bit read */
+	for (i = 0; i < IPV6_UDP_MAX_LEN; i += 2) {
+		if (i >= len_aligned)
+			break;
+
+		if (unlikely(!__may_pull(p, sizeof(*p), (unsigned char *)end)))
+			return -ENOBUFS;
+
+		/* making the verifier happy... */
+		barrier();
+
+		*sum += *p;
+		++p;
+	}
+
+	if (i == len - 1) {
+		/* in case payload is not aligned to the size of __be16 */
+		if (unlikely(!__may_pull(p, sizeof(__u8),
+					 (unsigned char *)end)))
+			return -ENOBUFS;
+
+		*sum += *((__u8 *)p);
+		++i;
+	}
+
+	/* -EBADF means BUG !!! */
+	return likely(i == len) ? 0 : -EBADF;
+}
+
+static void ipv6_sum16_unfold(__be32 *sum)
+{
+	*sum = (*sum & 0xffff) + (*sum >> 16);
+	/* add the carry */
+	*sum = (*sum & 0xffff) + (*sum >> 16);
+}
+
+static __always_inline int
+ipv6_udp_checksum(struct xdp_md *ctx, struct ipv6hdr *ip6h, struct udphdr *udph,
+		  __be16 *csum16)
+{
+	unsigned char *data_end = xdp_md_tail(ctx);
+	__sum16 orig_checksum;
+	__be32 checksum = 0;
+	__u16 ip6_plen;
+	int rc;
+
+	/* pseudo-header */
+	ipv6_addr_sum(&checksum, (const struct in6_addr *const)&ip6h->saddr);
+	ipv6_addr_sum(&checksum, (const struct in6_addr *const)&ip6h->daddr);
+
+	checksum += ip6h->payload_len;
+	checksum += ip6h->nexthdr << 8;	/* align to 16-bit boundary */
+
+	ip6_plen = bpf_ntohs(ip6h->payload_len);
+
+	/* save the checksum and set the udp's one to 0 */
+	orig_checksum = udph->check;
+	udph->check = 0;
+
+	rc = ipv6_payload_sum(&checksum, (const __be16 *const )udph, ip6_plen,
+			      data_end);
+	if (unlikely(rc))
+		goto out;
+
+	ipv6_sum16_unfold(&checksum);
+	checksum = ~checksum;
+
+	*csum16 = (__be16)checksum;
+out:
+	/* restore the original checksum */
+	udph->check = orig_checksum;
+
+	return rc;
 }
 
 #endif /* end of #ifdef for include header file */

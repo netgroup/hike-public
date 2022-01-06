@@ -21,8 +21,13 @@ HIKE_PROG(HIKE_PROG_NAME)
 {
 	struct pkt_info *info = hike_pcpu_shmem();
 	struct hdr_cursor *cur;
+	struct ipv6hdr *ip6h;
 	struct udphdr *udph;
-	__u16 dest;
+	__u16 dest_port;
+	__u16 src_port;
+	__be16 udp_len;
+	__sum16 check;
+	int rc;
 
 	DEBUG_HKPRG_PRINT("ID=0x%llx cookie=<%d>", HVM_ARG1, HVM_ARG2);
 
@@ -31,6 +36,11 @@ HIKE_PROG(HIKE_PROG_NAME)
 
 	cur = pkt_info_cur(info);
 	/* no need for checking cur != NULL right here */
+
+	ip6h = (struct ipv6hdr *)cur_header_pointer(ctx, cur, cur->nhoff,
+						    sizeof(*ip6h));
+	if (unlikely(!ip6h))
+		goto abort;
 
 	DEBUG_HKPRG_PRINT("pkt-info");
 	DEBUG_HKPRG_PRINT("dataoff=%d", cur->dataoff);
@@ -42,9 +52,20 @@ HIKE_PROG(HIKE_PROG_NAME)
 	if (unlikely(!udph))
 		goto abort;
 
-	dest = bpf_ntohs(udph->dest);
+	src_port = bpf_ntohs(udph->source);
+	dest_port = bpf_ntohs(udph->dest);
+	udp_len = bpf_ntohs(udph->len);
+	DEBUG_HKPRG_PRINT("udp src port=%d", src_port);
+	DEBUG_HKPRG_PRINT("udp dest port=%d", dest_port);
+	DEBUG_HKPRG_PRINT("udp len=%d", udp_len);
 
-	DEBUG_HKPRG_PRINT("udp dest port=%d", dest);
+	rc = ipv6_udp_checksum(ctx, ip6h, udph, &check);
+	if (unlikely(rc)) {
+		DEBUG_HKPRG_PRINT("checksum error=%d", rc);
+		goto abort;
+	}
+
+	DEBUG_HKPRG_PRINT("udp check=0x%x", bpf_ntohs(check));
 
 	return HIKE_XDP_VM;
 
