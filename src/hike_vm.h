@@ -241,12 +241,17 @@ enum {
 /* alu fields */
 #define HIKE_ADD			0x00
 #define HIKE_SUB			0x10
-#define HIKE_AND			0x50
+#define HIKE_MUL			0x20
+#define HIKE_DIV			0x30
 #define HIKE_OR				0X40
+#define HIKE_AND			0x50
 #define	HIKE_LSH			0x60
 #define	HIKE_RSH			0x70
+#define HIKE_NEG			0x80
+#define HIKE_MOD			0x90
 #define HIKE_XOR			0xa0
 #define HIKE_MOV			0xb0
+#define HIKE_ARSH			0xc0
 
 /* source modifiers */
 #define HIKE_SRC(code)			((code) & 0x08)
@@ -1819,36 +1824,46 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 #define ___ALU_LOAD_REGS_SIDE_EFFECT___()				\
 ({									\
 	dst_reg = insn->hic_dst;					\
+	int __rc;							\
 									\
 	/* select the source: src register or immediate */		\
 	switch (HIKE_SRC(opcode)) {					\
 	case HIKE_K:							\
 		imm32 = insn->imm;					\
-		rc = 0;							\
+		__rc = 0;						\
 		break;							\
 	case HIKE_X:							\
 		src_reg = insn->hic_src;				\
-		rc = __hike_chain_load_reg(cur_chain, src_reg,		\
-					   &reg_val);			\
+		__rc = __hike_chain_load_reg(cur_chain, src_reg,	\
+					     &reg_val);			\
 		break;							\
 	default:							\
-		rc = -EFAULT;						\
+		__rc = -EFAULT;						\
 		break;							\
 	}								\
 									\
-	if (likely(!rc))						\
-		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);\
+	if (likely(!__rc))						\
+		__rc = __hike_chain_ref_reg(cur_chain, dst_reg,		\
+					    &reg_ref);			\
 									\
-	rc;								\
+	__rc;								\
 })
+
+#define __HIKE_ALU64(OP)						\
+	      (HIKE_ALU64 | (OP) | HIKE_K):				\
+	 case (HIKE_ALU64 | (OP) | HIKE_X)
+
 	/* ALU arithmetic  */
-	case HIKE_ALU64 | HIKE_ADD | HIKE_K:
-	case HIKE_ALU64 | HIKE_SUB | HIKE_K:
-	case HIKE_ALU64 | HIKE_AND | HIKE_K:
-	case HIKE_ALU64 | HIKE_OR  | HIKE_K:
-	case HIKE_ALU64 | HIKE_XOR | HIKE_K:
-	case HIKE_ALU64 | HIKE_LSH | HIKE_K:
-	case HIKE_ALU64 | HIKE_RSH | HIKE_K:
+	case __HIKE_ALU64(HIKE_ADD):
+	case __HIKE_ALU64(HIKE_SUB):
+	case __HIKE_ALU64(HIKE_MUL):
+	case __HIKE_ALU64(HIKE_DIV):
+	case __HIKE_ALU64(HIKE_AND):
+	case __HIKE_ALU64(HIKE_OR):
+	case __HIKE_ALU64(HIKE_XOR):
+	case __HIKE_ALU64(HIKE_LSH):
+	case __HIKE_ALU64(HIKE_RSH):
+	case __HIKE_ALU64(HIKE_MOD):
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
 		if (rc < 0)
 			return rc;
@@ -1858,22 +1873,51 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 		DST = ((TYPE)DST) OP ((TYPE)SRC);			\
 		break
 
+#define ALUKX_SE(OPCODE, OP, TYPE)					\
+	ALU(((OPCODE) | HIKE_K), *reg_ref, OP, imm32, TYPE);		\
+	ALU(((OPCODE) | HIKE_X), *reg_ref, OP, reg_val, TYPE)		\
+
 		/* apply DST = DST OP SRC/imm
 		 * for more details about type conversion:
 		 * https://elixir.bootlin.com/linux/latest/source/kernel/bpf/core.c#L1433
 		 */
 		switch (opcode) {
-		ALU(HIKE_ALU64 | HIKE_ADD | HIKE_K, *reg_ref, +, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_SUB | HIKE_K, *reg_ref, -, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_AND | HIKE_K, *reg_ref, &, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_OR  | HIKE_K, *reg_ref, |, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_XOR | HIKE_K, *reg_ref, ^, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_LSH | HIKE_K, *reg_ref, <<, imm32, __u64);
-		ALU(HIKE_ALU64 | HIKE_RSH | HIKE_K, *reg_ref, >>, imm32, __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_ADD, +,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_SUB, -,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_MUL, *,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_DIV, /,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_AND, &,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_OR,  |,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_XOR, ^,  __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_LSH, <<, __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_RSH, >>, __u64);
+		ALUKX_SE(HIKE_ALU64 | HIKE_MOD, %,  __u64);
 		default:
 			return -EFAULT;
 		}
+#undef ALUKX_SE
 #undef ALU
+#undef __HIKE_ALU64
+
+		break;
+
+	/* dst >>= {reg,imm} (arithmetic) */
+	case HIKE_ALU64 | HIKE_ARSH | HIKE_K:
+	case HIKE_ALU64 | HIKE_ARSH | HIKE_X:
+		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
+		if (rc < 0)
+			return rc;
+
+		switch (opcode) {
+		case HIKE_ALU64 | HIKE_ARSH | HIKE_K:
+			(*(__s64 *)reg_ref) >>= imm32;
+			break;
+		case HIKE_ALU64 | HIKE_ARSH | HIKE_X:
+			(*(__s64 *)reg_ref) >>= (reg_val & 63);
+			break;
+		default:
+			return -EFAULT;
+		}
 
 		break;
 
@@ -1900,30 +1944,37 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		break;
 
-	/* conditional jump section using src and dst registers */
-	case HIKE_JMP64 | HIKE_JNE | HIKE_X:
-	case HIKE_JMP64 | HIKE_JEQ | HIKE_X:
-	case HIKE_JMP64 | HIKE_JGT | HIKE_X:
-	case HIKE_JMP64 | HIKE_JGE | HIKE_X:
-	case HIKE_JMP64 | HIKE_JLT | HIKE_X:
-	case HIKE_JMP64 | HIKE_JLE | HIKE_X:
-	case HIKE_JMP64 | HIKE_JSGT | HIKE_X:
-	case HIKE_JMP64 | HIKE_JSLT | HIKE_X:
-	case HIKE_JMP64 | HIKE_JSGE | HIKE_X:
-	case HIKE_JMP64 | HIKE_JSLE | HIKE_X:
-	case HIKE_JMP64 | HIKE_JSET | HIKE_X:
-	/* conditional jump section using immediate */
-	case HIKE_JMP64 | HIKE_JNE | HIKE_K:
-	case HIKE_JMP64 | HIKE_JEQ | HIKE_K:
-	case HIKE_JMP64 | HIKE_JGT | HIKE_K:
-	case HIKE_JMP64 | HIKE_JGE | HIKE_K:
-	case HIKE_JMP64 | HIKE_JLT | HIKE_K:
-	case HIKE_JMP64 | HIKE_JLE | HIKE_K:
-	case HIKE_JMP64 | HIKE_JSGT | HIKE_K:
-	case HIKE_JMP64 | HIKE_JSLT | HIKE_K:
-	case HIKE_JMP64 | HIKE_JSGE | HIKE_K:
-	case HIKE_JMP64 | HIKE_JSLE | HIKE_K:
-	case HIKE_JMP64 | HIKE_JSET | HIKE_K:
+	/* dst = -dst
+	 * note that HIKE_X bit is not set in this instruction: the HIKE_NEG
+	 * only operates on dst register.
+	 */
+	case HIKE_ALU64 | HIKE_NEG:
+		dst_reg = insn->hic_dst;
+
+		rc = __hike_chain_ref_reg(cur_chain, dst_reg, &reg_ref);
+		if (rc < 0)
+			return rc;
+
+		*reg_ref = -(*reg_ref);
+
+		break;
+
+	/* conditional jump section using JMP OP <reg,{imm/reg}> */
+#define __HIKE_JMP64(OP)						\
+	     (HIKE_JMP64 | (OP) | HIKE_K):				\
+	case (HIKE_JMP64 | (OP) | HIKE_X)
+
+	case __HIKE_JMP64(HIKE_JNE):
+	case __HIKE_JMP64(HIKE_JEQ):
+	case __HIKE_JMP64(HIKE_JGT):
+	case __HIKE_JMP64(HIKE_JGE):
+	case __HIKE_JMP64(HIKE_JLT):
+	case __HIKE_JMP64(HIKE_JLE):
+	case __HIKE_JMP64(HIKE_JSGT):
+	case __HIKE_JMP64(HIKE_JSLT):
+	case __HIKE_JMP64(HIKE_JSGE):
+	case __HIKE_JMP64(HIKE_JSLE):
+	case __HIKE_JMP64(HIKE_JSET):
 		offset = insn->hic_off;
 
 		rc = ___ALU_LOAD_REGS_SIDE_EFFECT___();
@@ -1935,58 +1986,31 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 			VAR = ((TYPE)DST) CMP_OP ((TYPE)SRC);		\
 			break
 
+#define COND_JUMPKX_SE(OPCODE, CMP_OP, TYPE)				\
+	COND_JUMP(((OPCODE) | HIKE_K), jmp_cond, *reg_ref, CMP_OP,	\
+		  imm32, TYPE);						\
+	COND_JUMP(((OPCODE) | HIKE_X), jmp_cond, *reg_ref, CMP_OP,	\
+		  reg_val, TYPE)
+
 		/* all immedates are casted to __u64, see:
 		 * https://elixir.bootlin.com/linux/latest/source/kernel/bpf/core.c#L1592
 		 */
 		switch (opcode) {
-		COND_JUMP(HIKE_JMP64 | HIKE_JEQ | HIKE_K,
-			  jmp_cond, *reg_ref, ==, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JNE | HIKE_K,
-			  jmp_cond, *reg_ref, !=, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JGT | HIKE_K,
-			  jmp_cond, *reg_ref, >, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JGE | HIKE_K,
-			  jmp_cond, *reg_ref, >=, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JLT | HIKE_K,
-			  jmp_cond, *reg_ref, <, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_K,
-			  jmp_cond, *reg_ref, <=, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSET | HIKE_K,
-			  jmp_cond, *reg_ref, &, imm32, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSGT | HIKE_K,
-			  jmp_cond, *reg_ref, >, imm32, __s64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSGE | HIKE_K,
-			  jmp_cond, *reg_ref, >=, imm32, __s64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSLT | HIKE_K,
-			  jmp_cond, *reg_ref, <, imm32, __s64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSLE | HIKE_K,
-			  jmp_cond, *reg_ref, <=, imm32, __s64);
-		/* ============================================= */
-		COND_JUMP(HIKE_JMP64 | HIKE_JEQ | HIKE_X,
-			  jmp_cond, *reg_ref, ==, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JNE | HIKE_X,
-			  jmp_cond, *reg_ref, !=, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JGT | HIKE_X,
-			  jmp_cond, *reg_ref, >, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JGE | HIKE_X,
-			  jmp_cond, *reg_ref, >=, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JLT | HIKE_X,
-			  jmp_cond, *reg_ref, <, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JLE | HIKE_X,
-			  jmp_cond, *reg_ref, <=, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSET | HIKE_X,
-			  jmp_cond, *reg_ref, &, reg_val, __u64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSGT | HIKE_X,
-			  jmp_cond, *reg_ref, >, reg_val, __s64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSGE | HIKE_X,
-			  jmp_cond, *reg_ref, >=, reg_val, __s64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSLT | HIKE_X,
-			  jmp_cond, *reg_ref, <, reg_val, __s64);
-		COND_JUMP(HIKE_JMP64 | HIKE_JSLE | HIKE_X,
-			  jmp_cond, *reg_ref, <=, reg_val, __s64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JEQ,  ==, __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JNE,  !=, __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JGT,  >,  __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JGE,  >=, __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JLT,  <,  __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JLE,  <=, __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JSET, &,  __u64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JSGT, >,  __s64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JSGE, >=, __s64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JSLT, <,  __s64);
+		COND_JUMPKX_SE(HIKE_JMP64 | HIKE_JSLE, <=, __s64);
 		default:
 			return -EFAULT;
 		}
+#undef COND_JUMP64_KX_SE
 #undef COND_JUMP
 
 		if (jmp_cond) {
@@ -1997,6 +2021,8 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 
 		/* end of conditional jump section */
 		break;
+#undef __HIKE_JMP64
+
 #undef ___ALU_LOAD_REGS_SIDE_EFFECT___
 
 	/* jump always */
