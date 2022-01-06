@@ -270,11 +270,11 @@ enum {
 #define	HIKE_IMM			0x00
 #define	HIKE_MEM			0x60
 
-#define		HIKE_SIZE(code)		((code) & 0x18)
-#define		HIKE_DW			0x18 /* 64-bit */
-#define		HIKE_W			0x00 /* 32-bit */
-#define		HIKE_H			0x08 /* 16-bit */
-#define		HIKE_B			0x10 /*  8-bit */
+#define	HIKE_SIZE(code)			((code) & 0x18)
+#define	HIKE_DW				0x18 /* 64-bit */
+#define	HIKE_W				0x00 /* 32-bit */
+#define	HIKE_H				0x08 /* 16-bit */
+#define	HIKE_B				0x10 /*  8-bit */
 
 /* raw helper macros to set the hike_insn structure */
 #define HIKE_RAW_INSN(CODE, DST, SRC, OFF, IMM)				\
