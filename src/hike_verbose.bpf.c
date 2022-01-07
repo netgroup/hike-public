@@ -96,8 +96,8 @@ HIKE_PROG(HIKE_PROG_NAME)
 	/* set the string in the shmem, so we do not overload the stack.
 	 * In this case, the keyword to be found is pretty small and then it
 	 * can be placed into the stack, directly.
-	 * Howerver, this exmaple shows a possible to way for loading very long
-	 * strings or huge data block withouth hogging the stack (<= 512 bytes).
+	 * Howerver, this exmaple shows a possible way for loading very long
+	 * strings or huge data block without hogging the stack (<= 512 bytes).
 	 */
 	pshm->p[0] = 'f';
 	pshm->p[1] = 'o';
