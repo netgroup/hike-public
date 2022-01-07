@@ -1398,6 +1398,23 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 	bpf_map_lookup_elem(&hvm_shmem_map, &__off);		\
 })
 
+#define hike_pcpu_shmem_obj(OFFSET, OBJ)				\
+({									\
+	unsigned char *__p = (unsigned char *)hike_pcpu_shmem();	\
+	OBJ *__v;							\
+									\
+	if (unlikely(!__p)) {						\
+		__v = NULL;						\
+	} else {							\
+		__v = (OBJ *)(__p + (OFFSET));				\
+		if (unlikely((unsigned char *)(__v + 1) > 		\
+			      __p + sizeof(struct hike_shared_mem_data)))\
+			__v = NULL;					\
+	}								\
+	barrier();							\
+	__v;								\
+})
+
 #define __hike_virt_to_phys(__vaddr, __pptr) 			\
 ({								\
 	struct vaddr_info __vinfo = { .addr = __vaddr };	\
