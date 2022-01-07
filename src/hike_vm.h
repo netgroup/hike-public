@@ -1392,10 +1392,10 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 				  HIKE_CHAIN_REGMEM_STACK_SIZE);
 }
 
-#define hike_pcpu_shmem() 					\
-({								\
-	const __u32 __off = 0;					\
-	bpf_map_lookup_elem(&hvm_shmem_map, &__off);		\
+#define hike_pcpu_shmem() 						\
+({									\
+	const __u32 __off = 0;						\
+	bpf_map_lookup_elem(&hvm_shmem_map, &__off);			\
 })
 
 #define hike_pcpu_shmem_obj(OFFSET, OBJ)				\
@@ -1415,39 +1415,39 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 	__v;								\
 })
 
-#define __hike_virt_to_phys(__vaddr, __pptr) 			\
-({								\
-	struct vaddr_info __vinfo = { .addr = __vaddr };	\
-	struct hike_shared_mem_data *__shmem;			\
-	int __rc = -EINVAL;					\
-								\
-	switch (__vinfo.bank_id) {				\
-	case HIKE_MEM_BID_PCPU_SHARED:				\
-		__shmem = hike_pcpu_shmem();			\
-		if (unlikely(!__shmem)) {			\
-			__rc = -EINVAL;				\
-			break;					\
-		}						\
-								\
-		if (unlikely(__vinfo.off + sizeof(**(__pptr)) >	\
-			     HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE)) { \
-			__rc = -ENOBUFS;			\
-			break;					\
-		}						\
-								\
-		*__pptr = (typeof(**(__pptr)) *)		\
-				&__shmem->data[__vinfo.off];	\
-								\
-		__rc = 0;					\
-		break;						\
-								\
-	default:						\
-		/* TODO: should be unsupported operation */	\
-		__rc = -EBADF;					\
-		break;						\
-	}							\
-								\
-	__rc;							\
+#define __hike_virt_to_phys(__vaddr, __pptr) 				\
+({									\
+	struct vaddr_info __vinfo = { .addr = __vaddr };		\
+	struct hike_shared_mem_data *__shmem;				\
+	int __rc = -EINVAL;						\
+									\
+	switch (__vinfo.bank_id) {					\
+	case HIKE_MEM_BID_PCPU_SHARED:					\
+		__shmem = hike_pcpu_shmem();				\
+		if (unlikely(!__shmem)) {				\
+			__rc = -EINVAL;					\
+			break;						\
+		}							\
+									\
+		if (unlikely(__vinfo.off + sizeof(**(__pptr)) >		\
+			     HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE)) {	\
+			__rc = -ENOBUFS;				\
+			break;						\
+		}							\
+									\
+		*__pptr = (typeof(**(__pptr)) *)			\
+				&__shmem->data[__vinfo.off];		\
+									\
+		__rc = 0;						\
+		break;							\
+									\
+	default:							\
+		/* TODO: should be unsupported operation */		\
+		__rc = -EBADF;						\
+		break;							\
+	}								\
+									\
+	__rc;								\
 })
 
 static __always_inline int hike_shared_mem_init(void)
