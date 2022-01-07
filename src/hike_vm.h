@@ -270,11 +270,11 @@ enum {
 #define	HIKE_IMM			0x00
 #define	HIKE_MEM			0x60
 
-#define		HIKE_SIZE(code)		((code) & 0x18)
-#define		HIKE_DW			0x18 /* 64-bit */
-#define		HIKE_W			0x00 /* 32-bit */
-#define		HIKE_H			0x08 /* 16-bit */
-#define		HIKE_B			0x10 /*  8-bit */
+#define	HIKE_SIZE(code)			((code) & 0x18)
+#define	HIKE_DW				0x18 /* 64-bit */
+#define	HIKE_W				0x00 /* 32-bit */
+#define	HIKE_H				0x08 /* 16-bit */
+#define	HIKE_B				0x10 /*  8-bit */
 
 /* raw helper macros to set the hike_insn structure */
 #define HIKE_RAW_INSN(CODE, DST, SRC, OFF, IMM)				\
@@ -1392,45 +1392,62 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 				  HIKE_CHAIN_REGMEM_STACK_SIZE);
 }
 
-#define hike_pcpu_shmem() 					\
-({								\
-	const __u32 __off = 0;					\
-	bpf_map_lookup_elem(&hvm_shmem_map, &__off);		\
+#define hike_pcpu_shmem() 						\
+({									\
+	const __u32 __off = 0;						\
+	bpf_map_lookup_elem(&hvm_shmem_map, &__off);			\
 })
 
-#define __hike_virt_to_phys(__vaddr, __pptr) 			\
-({								\
-	struct vaddr_info __vinfo = { .addr = __vaddr };	\
-	struct hike_shared_mem_data *__shmem;			\
-	int __rc = -EINVAL;					\
-								\
-	switch (__vinfo.bank_id) {				\
-	case HIKE_MEM_BID_PCPU_SHARED:				\
-		__shmem = hike_pcpu_shmem();			\
-		if (unlikely(!__shmem)) {			\
-			__rc = -EINVAL;				\
-			break;					\
-		}						\
-								\
-		if (unlikely(__vinfo.off + sizeof(**(__pptr)) >	\
-			     HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE)) { \
-			__rc = -ENOBUFS;			\
-			break;					\
-		}						\
-								\
-		*__pptr = (typeof(**(__pptr)) *)		\
-				&__shmem->data[__vinfo.off];	\
-								\
-		__rc = 0;					\
-		break;						\
-								\
-	default:						\
-		/* TODO: should be unsupported operation */	\
-		__rc = -EBADF;					\
-		break;						\
-	}							\
-								\
-	__rc;							\
+#define hike_pcpu_shmem_obj(OFFSET, OBJ)				\
+({									\
+	unsigned char *__p = (unsigned char *)hike_pcpu_shmem();	\
+	OBJ *__v;							\
+									\
+	if (unlikely(!__p)) {						\
+		__v = NULL;						\
+	} else {							\
+		__v = (OBJ *)(__p + (OFFSET));				\
+		if (unlikely((unsigned char *)(__v + 1) > 		\
+			      __p + sizeof(struct hike_shared_mem_data)))\
+			__v = NULL;					\
+	}								\
+	barrier();							\
+	__v;								\
+})
+
+#define __hike_virt_to_phys(__vaddr, __pptr) 				\
+({									\
+	struct vaddr_info __vinfo = { .addr = __vaddr };		\
+	struct hike_shared_mem_data *__shmem;				\
+	int __rc = -EINVAL;						\
+									\
+	switch (__vinfo.bank_id) {					\
+	case HIKE_MEM_BID_PCPU_SHARED:					\
+		__shmem = hike_pcpu_shmem();				\
+		if (unlikely(!__shmem)) {				\
+			__rc = -EINVAL;					\
+			break;						\
+		}							\
+									\
+		if (unlikely(__vinfo.off + sizeof(**(__pptr)) >		\
+			     HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE)) {	\
+			__rc = -ENOBUFS;				\
+			break;						\
+		}							\
+									\
+		*__pptr = (typeof(**(__pptr)) *)			\
+				&__shmem->data[__vinfo.off];		\
+									\
+		__rc = 0;						\
+		break;							\
+									\
+	default:							\
+		/* TODO: should be unsupported operation */		\
+		__rc = -EBADF;						\
+		break;							\
+	}								\
+									\
+	__rc;								\
 })
 
 static __always_inline int hike_shared_mem_init(void)
