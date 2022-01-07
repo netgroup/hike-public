@@ -73,6 +73,6 @@ abort:
 	DEBUG_HKPRG_PRINT("abort");
 	return XDP_ABORTED;
 }
-EXPORT_HIKE_PROG(HIKE_PROG_NAME);
+EXPORT_HIKE_PROG_2(HIKE_PROG_NAME, __u64, cookie);
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
