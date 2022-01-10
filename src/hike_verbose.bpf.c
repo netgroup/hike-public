@@ -19,11 +19,12 @@
 
 HIKE_PROG(HIKE_PROG_NAME)
 {
-#define BUF_LEN	3
+#define BUF_LEN	16
 	struct pkt_info *info = hike_pcpu_shmem();
 	struct __shm_buff {
 		char p[BUF_LEN];
 	} *pshm;
+	unsigned char *data_end;
 	struct hdr_cursor *cur;
 	struct ipv6hdr *ip6h;
 	struct udphdr *udph;
@@ -77,16 +78,12 @@ HIKE_PROG(HIKE_PROG_NAME)
 
 	DEBUG_HKPRG_PRINT("udp check=0x%x", bpf_ntohs(check));
 
-	/* search for the keyword and replace if found */
-
-	udp_plen = udp_len - sizeof(*udph);
-	if (udp_plen < BUF_LEN)
-		goto out;
-
-	udp_poff = cur->dataoff + sizeof(*udph);
-	p = (char *)cur_header_pointer(ctx, cur, udp_poff, BUF_LEN);
-	if (unlikely(!p))
+	if (unlikely(udp_len < sizeof(*udph)))
 		goto abort;
+
+	if (udp_len == sizeof(*udph))
+		/* no payload for this UDP packet */
+		goto out;
 
 	/* reserve some space for storing the string to be searched */
 	pshm = hike_pcpu_shmem_obj(sizeof(struct pkt_info), struct __shm_buff);
@@ -99,13 +96,48 @@ HIKE_PROG(HIKE_PROG_NAME)
 	 * Howerver, this exmaple shows a possible way for loading very long
 	 * strings or huge data block without hogging the stack (<= 512 bytes).
 	 */
-	pshm->p[0] = 'f';
-	pshm->p[1] = 'o';
-	pshm->p[2] = 'o';
+	pshm->p[0] = 'q';
+	pshm->p[1] = 'w';
+	pshm->p[2] = 'e';
+	pshm->p[3] = 'r';
+	pshm->p[4] = 't';
+	pshm->p[5] = 'y';
+	pshm->p[6] = '\0';
+	/* any kind of garbage at this point */
+	pshm->p[7] = 'c';
+	pshm->p[8] = 'o';
+	pshm->p[9] = 'o';
+	pshm->p[10] = 'l';
 
 	keyword = &pshm->p[0];
-	for (i = 0; i < BUF_LEN; ++i) {
-		if (p[i] != keyword[i])
+
+	/* search the keyword (prefix) */
+
+	/* p points to the beginning of the UDP payload */
+	udp_poff = cur->dataoff + sizeof(*udph);
+	p = (char *)cur_header_pointer(ctx, cur, udp_poff, sizeof(*p));
+	if (unlikely(!p))
+		/* since we already check for the udp_len, if we cannot access
+		 * the first byte of the payload, something very weird is just
+		 * happened...
+		 */
+		goto abort;
+
+	udp_plen = udp_len - sizeof(*udph);
+	data_end = xdp_md_tail(ctx);
+
+	for (i = 0; i < BUF_LEN; ++i, ++p) {
+		if (keyword[i] == '\0')
+			/* we treat the '\0' as the empty string..., the empty
+			 * string is always a prefix for any word to be
+			 * searched for.
+			 */
+			break;
+
+		if (i >= udp_plen || !__may_pull(p, sizeof(*p), data_end))
+			goto out;
+
+		if (*p != keyword[i])
 			goto out;
 	}
 
@@ -117,7 +149,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 	/* string found event stored into the shmem */
 	*ok = 1;
 
-	DEBUG_HKPRG_PRINT(">>> keyword %s found <<<", keyword);
+	DEBUG_HKPRG_PRINT(">>> keyword '%s' found <<<", keyword);
 out:
 	return HIKE_XDP_VM;
 
