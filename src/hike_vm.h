@@ -72,10 +72,22 @@ typedef __u8	bool;
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
+#ifndef __bpf_printk
+#define __bpf_printk(...)					\
+do{								\
+		bpf_printk(__VA_ARGS__);			\
+} while (0)
+#endif
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+/* API to be used *ONLY* for debug purposes
+ * ========================================
+ */
 #if HIKE_DEBUG == 1
 #define DEBUG_PRINT(...)					\
 do{								\
-		bpf_printk(__VA_ARGS__);			\
+		__bpf_printk(__VA_ARGS__);			\
 } while (0)
 
 #ifdef HIKE_PROG_NAME
@@ -91,6 +103,93 @@ do {								\
 #define DEBUG_PRINT(...) do {} while (0)
 #define DEBUG_HKPRG_PRINT(...) do {} while (0)
 #endif
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+
+/* New API for printing into the trace pipe
+ * ========================================
+ */
+#define HIKE_PRINT_LEVEL_EMERG		0
+#define HIKE_PRINT_LEVEL_ALERT		1
+#define HIKE_PRINT_LEVEL_CRIT		2
+#define HIKE_PRINT_LEVEL_ERR		3
+#define HIKE_PRINT_LEVEL_WARNING	4
+#define HIKE_PRINT_LEVEL_NOTICE		5
+#define HIKE_PRINT_LEVEL_INFO		6
+#define HIKE_PRINT_LEVEL_DEBUG		7
+
+#ifndef HIKE_PRINT_LEVEL
+#define HIKE_PRINT_LEVEL		HIKE_PRINT_LEVEL_WARNING
+#endif
+
+/* Introduce new API for printing on trace pipe
+ *
+ * The new set of APIs introduced allows to differentiate the printing
+ * behavior based on the priority to be assigned to the printed message.
+ *
+ * Below are several predefined priorities that are conceptually associated
+ * with some types of events such as EMERG, ERR, WARNING, etc.
+ * Each priority is expressed with a positive integer.
+ *
+ * NOTE: the highest priority corresponds to the value 0 (EMERG).
+ * Therefore, the lower the priority, the higher its associated integer
+ * value.
+ *
+ * EMERG     0  | Higher Priority
+ * ALERT     1  |
+ * CRIT      2  |
+ * ERR       3  |
+ * WARNING   4  |
+ * NOTICE    5  |
+ * INFO      6  |
+ * DEBUG     7  v Lower Priority
+ *
+ * Within an eBPF HIKe program, it is possible to set the HIKE_PRINT_LEVEL
+ * macro to one of the priority values shown above; otherwise the
+ * HIKE_PRINT_LEVEL is the default value specified by the HIKe VM.
+ *
+ * As a result, all print messages that have a priority greater than or
+ * equal to HIKE_PRINT_LEVEL will be shown on the trace pipe.
+ *
+ * It should also be noted once more that the higher the priority, the
+ * lower the numerical value.
+ * Therefore, assuming that HIKE_PRINT_LEVEL is set to ERR, (numerical
+ * value of priority 3), all the print messages whose numerical values of
+ * priority are 0,1,2,3 (that is EMERG, ALERT, CRIT, ERR) are shown afterwards.
+ */
+
+#ifdef HIKE_PROG_NAME
+#define ___HIKE_PROG_NAME HIKE_PROG_NAME
+#else
+/* rather than leaving an empty space, we print the 'u' char; 'u' stands for
+ * 'unknown' program.
+ */
+#define ___HIKE_PROG_NAME u
+#endif
+
+#define __HIKE_PRINT(LEVEL, ...)					\
+do {									\
+	/* since those values are macros and values never change,	\
+	 * the optimizer remove the if :-)				\
+	 */								\
+	if (EVAL_CAT_2(HIKE_PRINT_LEVEL_, LEVEL)			\
+	    <= HIKE_PRINT_LEVEL)					\
+		__bpf_printk(stringify(LEVEL)": "			\
+			     stringify(___HIKE_PROG_NAME)": "		\
+			     __VA_ARGS__);				\
+} while (0)
+
+/* Unified print helper functions for HIKe eBPF Programs */
+#define hike_pr_emerg(...)	__HIKE_PRINT(EMERG, __VA_ARGS__)
+#define hike_pr_alert(...)	__HIKE_PRINT(ALERT, __VA_ARGS__)
+#define hike_pr_crit(...)	__HIKE_PRINT(CRIT, __VA_ARGS__)
+#define hike_pr_err(...)	__HIKE_PRINT(ERR, __VA_ARGS__)
+#define hike_pr_warn(...)	__HIKE_PRINT(WARNING, __VA_ARGS__)
+#define hike_pr_notice(...)	__HIKE_PRINT(NOTICE, __VA_ARGS__)
+#define hike_pr_info(...)	__HIKE_PRINT(INFO, __VA_ARGS__)
+#define hike_pr_debug(...)	__HIKE_PRINT(DEBUG, __VA_ARGS__)
+
+/* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 /* jmp table for hosting all the HIKe programs */
 bpf_map(hvm_hprog_map, PROG_ARRAY, __u32, __u32, GEN_PROG_TABLE_SIZE);
