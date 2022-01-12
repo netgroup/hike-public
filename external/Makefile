@@ -1,5 +1,6 @@
 
-BUILD ?= build
+BUILD ?= $(addprefix $(shell pwd)/,build)
+SRC_DIR ?= $(shell pwd)
 
 #######################
 ## DO NOT EDIT BELOW ##
@@ -26,32 +27,42 @@ define check_dir
 	fi
 endef
 
-HIKE_DIR_ABS := $(abspath $(HIKE_DIR))
-PWD := $(abspath $(shell pwd))
+# cmd line cannot override any of those vars below
+# ================================================
+# Root HIKe Directory (i.e.: src HIKe's directory)
+override __HIKE_DIR := $(abspath $(HIKE_DIR))
 
-export OUTPUT := $(abspath $(shell pwd)/$(BUILD))
-export SRC_DIR := $(PWD)
-export EBPF_SRC := $(PROG)
-export HIKE_CHAIN_SRC := $(CHAIN)
+override __OUTPUT := $(abspath $(BUILD))
+override __SRC_DIR := $(abspath $(SRC_DIR))
+override __EBPF_SRC := $(PROG)
+override __HIKE_CHAIN_SRC := $(CHAIN)
+# ------------------------------------------------
 
 .PHONY: all prog chain
 
 all:
 	$(error You cannot invoke "all" target)
 
+# TODO: fix the name of mandatory vars removing the "__" prefix
+
 prog:
-	$(call check_defined, HIKE_DIR)
+	$(call check_defined, __HIKE_DIR)
 	$(call check_defined, PROG)
-	$(call check_dir, HIKE_DIR_ABS, $(HIKE_DIR_ABS))
-	cd $(HIKE_DIR_ABS) && $(MAKE) $@
+	$(call check_dir, __HIKE_DIR, $(__HIKE_DIR))
+	cd $(__HIKE_DIR) && \
+		$(MAKE) prog SRC_DIR=$(__SRC_DIR) EBPF_SRC=$(__EBPF_SRC) \
+			OUTPUT=$(__OUTPUT)
 
 chain:
-	$(call check_defined, HIKE_DIR)
+	$(call check_defined, __HIKE_DIR)
 	$(call check_defined, CHAIN)
-	$(call check_dir, HIKE_DIR_ABS, $(HIKE_DIR_ABS))
-	cd $(HIKE_DIR_ABS) && $(MAKE) $@
+	$(call check_dir, __HIKE_DIR, $(__HIKE_DIR))
+	cd $(__HIKE_DIR) && \
+		$(MAKE) chain SRC_DIR=$(__SRC_DIR)			\
+			HIKE_CHAIN_SRC=$(__HIKE_CHAIN_SRC)		\
+			OUTPUT=$(__OUTPUT)
 
 .PHONY: clean
 clean:
-	rm -rf $(OUTPUT)
+	rm -rf $(__OUTPUT)
 
