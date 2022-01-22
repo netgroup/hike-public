@@ -14,7 +14,8 @@ HIKE_CFLAGS ?=
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 # eBPF programs; add more eBPF programs here.
-EBPF_SRC ?= minimal_xdp.bpf.c \
+EBPF_SRC ?= hikevm.bpf.c \
+	    minimal_xdp.bpf.c \
 	    minimal_classifier.bpf.c \
 	    monitor.bpf.c \
 	    ip6_tos_cls.bpf.c \

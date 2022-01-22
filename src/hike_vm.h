@@ -596,7 +596,7 @@ struct hike_chain_regmem {
 
 #define __ACCESS_REGMEM_STACK(regmem)	((void *)&(regmem)->stack[0])
 
-/* number of HIKe VM instructions contained in a single HIKe chain */
+/* number of HIKe VM instructions contained in a single HIKe Chain */
 #define HIKE_CHAIN_NINSN_MAX		64
 
 struct hike_chain {
@@ -604,9 +604,11 @@ struct hike_chain {
 	__u16 ninsn;
 	__u16 upc;
 
-	/* registers and private memory for an HIKe Microprogram/Chain */
+	__u8 ___sec_regmem___[0];
+	/* registers and private stack for an HIKe Chain */
 	struct hike_chain_regmem regmem;
 
+	__u8 ___sec_text___[0];
 	/* moving the chain text code outside pcpu memory is slower for a small
 	 * (~32 instructions) chain rather than copy the whole chain and put it
 	 * in pcpu memory.
