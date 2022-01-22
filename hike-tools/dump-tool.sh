@@ -44,15 +44,32 @@ if [ ! -f ${HIKEVM_BTF_JSON} ]; then
 	exit 1
 fi
 
-# FIXME: follow the same approach as for the SEC_TEXT_OFFBITS
-HIKE_CHAIN_NINSN_MAX="$(grep -Eo \
-	"#define[[:blank:]]*HIKE_CHAIN_NINSN_MAX[[:blank:]]*([0-9]+)[[:blank:]]*" ${HIKE_VM_CORE} \
-	| awk '$3 ~ /^[0-9]+$/ {print $3}')"
-if [ -z "${HIKE_CHAIN_NINSN_MAX}" ]; then
-	echo "error: cannot get the max number of insns for the HIKe VM"
-	exit 1
+# --------------------------------------------------------------------------- #
+# get the ID of the json element which describes the array containing the
+# text instructions of a HIKe Chain.
+___BUFF='.types[] | '
+___BUFF+='select(.kind=="STRUCT" and .name=="hike_chain") | '
+___BUFF+='.members[] | '
+___BUFF+='select(.name=="insns") | '
+___BUFF+='.type_id'
+
+ELEM_ID="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: an error occurred during btf.json analysis"
+	exit ${RC}
 fi
 
+___BUFF='.types[] | '
+___BUFF+="select(.kind==\"ARRAY\" and .id==${ELEM_ID}) | "
+___BUFF+='.nr_elems'
+
+HIKE_CHAIN_NINSN_MAX="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: an error occurred during btf.json analysis"
+	exit ${RC}
+fi
+# --------------------------------------------------------------------------- #
+# get the offset of the HIKe Chain text section
 ___BUFF='.types[] | '
 ___BUFF+='select(.kind=="STRUCT" and .name=="hike_chain") | '
 ___BUFF+='.members[] | '
@@ -64,6 +81,7 @@ if [ ${RC} -ne 0 ]; then
 	echo "error: an error occurred during btf.json analysis"
 	exit ${RC}
 fi
+# --------------------------------------------------------------------------- #
 
 HIKE_CHAIN_HEADER_LEN=$((HIKE_CHAIN_SEC_TEXT_OFFBITS/8))
 
