@@ -1508,6 +1508,7 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 		__v = NULL;						\
 	} else {							\
 		__v = (OBJ *)(__p + (OFFSET));				\
+		barrier();						\
 		if (unlikely((unsigned char *)(__v + 1) > 		\
 			      __p + sizeof(struct hike_shared_mem_data)))\
 			__v = NULL;					\
