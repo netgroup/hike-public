@@ -116,11 +116,12 @@ cur_adjust_proto_offsets(struct hdr_cursor *cur, int off)
 			((__cur)->dataoff += (__len))
 
 static __always_inline int
-cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
+cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, unsigned int len)
 {
 	unsigned char *data, *tail;
 
 	cur->dataoff &= PROTO_OFF_MAX;
+	len &= PROTO_OFF_MAX;
 
 	data = cur_data(ctx, cur);
 	tail = xdp_md_tail(ctx);
@@ -129,7 +130,7 @@ cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 }
 
 static __always_inline unsigned char *
-cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
+cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, unsigned int len)
 {
 	if (!cur_may_pull(ctx, cur, len))
 		return NULL;
@@ -139,13 +140,14 @@ cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, int len)
 }
 
 static __always_inline unsigned char *
-cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur, int off, int len)
+cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur,
+		   unsigned int off, unsigned int len)
 {
 	unsigned char *head = xdp_md_head(ctx);
 	unsigned char *tail = xdp_md_tail(ctx);
-	int __off = off + len;
+	unsigned int __off = off + len;
 
-	if (__off < 0 || __off > PROTO_OFF_MAX)
+	if (__off > PROTO_OFF_MAX)
 		return NULL;
 
 	len &= PROTO_OFF_MAX;
