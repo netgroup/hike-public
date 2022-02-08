@@ -467,3 +467,14 @@ error:
 out:
 	return 0;
 }
+
+#define hike_sr6_inline_udp() \
+	hike_elem_call_1(HIKE_EBPF_PROG_SR6_INLINE_UDP)
+
+HIKE_CHAIN_1(HIKE_CHAIN_SR6_INLINE_UDP)
+{
+	hike_sr6_inline_udp();
+	packet_pass();
+
+	return 0;
+}
