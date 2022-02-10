@@ -26,11 +26,14 @@ HIKE_PROG(HIKE_PROG_NAME)
 	struct __shm_buff {
 		char p[BUF_LEN];
 	} *pshm;
+	struct ipv6hdr *ip6h, *new_ip6h;
+	struct ethhdr *old, *new;
 	unsigned char *data_end;
 	struct ipv6_sr_hdr *srh;
 	struct hdr_cursor *cur;
 	unsigned int shmem_off;
-	struct ipv6hdr *ip6h;
+	int srh_len = -EINVAL;
+	int srhoff = -EINVAL;
 	struct udphdr *udph;
 	struct ipv6hdr *ph;
 	int found = false;
@@ -44,7 +47,6 @@ HIKE_PROG(HIKE_PROG_NAME)
 	__u16 ip6_len;
 	char *keyword;
 	int pull_len;
-	int srh_len;
 	int offset;
 	__u64 *ok;
 	char *p;
@@ -164,8 +166,8 @@ HIKE_PROG(HIKE_PROG_NAME)
 	hike_pr_info("IPv6 pseudo-header len=%d\n", ip6_len);
 
 	/* we need to take the last segment and copy it into the IPv6 DA */
-	offset = cur->nhoff;
-	rc = ipv6_find_hdr(ctx, cur, &offset, NEXTHDR_ROUTING, NULL, NULL);
+	srhoff = cur->nhoff;
+	rc = ipv6_find_hdr(ctx, cur, &srhoff, NEXTHDR_ROUTING, NULL, NULL);
 	if (unlikely(rc < 0)) {
 		hike_pr_err("cannot locate SRH");
 		goto abort;
@@ -175,7 +177,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 	 * the sidlist is the last one ;-)
 	 */
 	srh_minlen = sizeof(*srh) + sizeof(srh->segments[0]);
-	srh = (struct ipv6_sr_hdr *)cur_header_pointer(ctx, cur, offset,
+	srh = (struct ipv6_sr_hdr *)cur_header_pointer(ctx, cur, srhoff,
 						       srh_minlen);
 	if (unlikely(!srh)) {
 		hike_pr_err("SRH must contain one SID at least");
@@ -285,7 +287,59 @@ eval_checksum:
 	found = (*ok == 1);
 
 	hike_pr_notice(">>> keyword '%s' found <<<", keyword);
+
 out:
+	/* We are about to pop the inline SRH, if any.
+	 * TODO: we have to make a separate function or program to do that!
+	 */
+	if (srh_len < 0)
+		goto out2;
+
+	/* Supported for the moment only the following layout:
+	 *
+	 *  +----------------------------------+
+	 *  | eth | IPv6 | SRH | UDP | payload |
+	 *  +----------------------------------+
+	 */
+	old = (struct ethhdr *)cur_header_pointer(ctx, cur, cur->mhoff,
+						  sizeof(*old));
+	new = (struct ethhdr *)cur_header_pointer(ctx, cur, cur->mhoff +
+						  srh_len,
+						  sizeof(*new));
+	if (unlikely(!new || !old))
+		goto abort;
+
+	/* we are moving the mac header */
+	memmove(new, old, sizeof(*new));
+
+	new_ip6h = (struct ipv6hdr *)cur_header_pointer(ctx, cur, cur->nhoff +
+							srh_len,
+							sizeof(*new_ip6h));
+	if (unlikely(!new_ip6h))
+		goto abort;
+
+	/* we are moving the IPv6 header.
+	 * NB: we are copying the pseudo-header since we have just fixed the
+	 * DA, payload_len and proto.
+	 */
+	memmove(new_ip6h, ph, sizeof(*new_ip6h));
+
+	rc = bpf_xdp_adjust_head(ctx, srh_len);
+	if (unlikely(rc < 0)) {
+		hike_pr_err("cannot adjust the xdp frame sizeo of %d",
+			    -srh_len);
+		goto abort;
+	}
+
+	hike_pr_info("SRH inline popped out");
+
+	/* any offset in hdr_cursor should be considered invalid after this
+	 * point since we change the packet's layout.
+	 *
+	 * TODO: invalidate offsets or evaluate them once again
+	 */
+
+out2:
 	HVM_RET = found;
 	return HIKE_XDP_VM;
 
