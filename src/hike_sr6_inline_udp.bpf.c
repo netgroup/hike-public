@@ -19,6 +19,15 @@
 #include "parse_helpers.h"
 #include "hike_vm.h"
 
+#include "hike_string.h"
+
+/* support up to 511 byte to be moved before the SRH inline during the popping
+ * operation.
+ * If this macro is not defined, we fallback on a simpler pop solution that
+ * is only able to move mac header plus the IPv6 headers preceding SRH.
+ */
+#define SUPPORT_ANY_EXTHDR_BEFORE_SRH_POP
+
 HIKE_PROG(HIKE_PROG_NAME)
 {
 #define BUF_LEN	16
@@ -26,14 +35,19 @@ HIKE_PROG(HIKE_PROG_NAME)
 	struct __shm_buff {
 		char p[BUF_LEN];
 	} *pshm;
-	struct ipv6hdr *ip6h, *new_ip6h;
+#ifndef SUPPORT_ANY_EXTHDR_BEFORE_SRH_POP
 	struct ethhdr *old, *new;
+	struct ipv6hdr *new_ip6h;
+#else
+	unsigned char *to, *from;
+#endif
 	unsigned char *data_end;
 	struct ipv6_sr_hdr *srh;
 	struct hdr_cursor *cur;
 	unsigned int shmem_off;
 	int srh_len = -EINVAL;
 	int srhoff = -EINVAL;
+	struct ipv6hdr *ip6h;
 	struct udphdr *udph;
 	struct ipv6hdr *ph;
 	int found = false;
@@ -162,8 +176,8 @@ HIKE_PROG(HIKE_PROG_NAME)
 	ip6_len -= pull_len;
 	ph->payload_len = bpf_htons(ip6_len);
 
-	hike_pr_info("IPv6 pseudo-header proto=%d\n", ph->nexthdr);
-	hike_pr_info("IPv6 pseudo-header len=%d\n", ip6_len);
+	hike_pr_info("IPv6 pseudo-header proto=%d", ph->nexthdr);
+	hike_pr_info("IPv6 pseudo-header len=%d", ip6_len);
 
 	/* we need to take the last segment and copy it into the IPv6 DA */
 	srhoff = cur->nhoff;
@@ -295,6 +309,7 @@ out:
 	if (srh_len < 0)
 		goto out2;
 
+#ifndef SUPPORT_ANY_EXTHDR_BEFORE_SRH_POP
 	/* Supported for the moment only the following layout:
 	 *
 	 *  +----------------------------------+
@@ -332,13 +347,52 @@ out:
 	}
 
 	hike_pr_info("SRH inline popped out");
+#else
+	/* Supported for the moment only the following layout:
+	 *
+	 *  +----------------------------------------------------------+
+	 *  | eth | IPv6 | Ext. HDRs | SRH | Ext. HDRs | UDP | payload |
+	 *  +----------------------------------------------------------+
+	 *   ^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^
+	 *               \              \___ will be popped out
+	 *               |
+	 *               |___ up to 511 bytes can precede the SRH to be popped
+	 */
 
+	ip6h->payload_len = ph->payload_len;
+	ip6h->nexthdr = ph->nexthdr;
+	ip6h->daddr = ph->daddr;
+
+	/* let's take raw packet poitners */
+	to = (unsigned char *)(xdp_md_head(ctx) + srh_len);
+	from = (unsigned char *)xdp_md_head(ctx);
+	/* XXX: even if data_end was loaded with the xdp_md_tail value, the
+	 * verifier is not able to verify the program; we need to load the
+	 * 'tail' address of the packet once again.
+	 * This seems to be a verifier issue...
+	 */
+	data_end = (unsigned char *)xdp_md_tail(ctx);
+
+	rc = hike_memmove(to, from, srh_len, data_end);
+	if (unlikely(rc < 0)) {
+		hike_pr_err("cannot move data into the packet");
+		goto abort;
+	}
+
+	rc = bpf_xdp_adjust_head(ctx, srh_len);
+	if (unlikely(rc < 0)) {
+		hike_pr_err("cannot adjust the xdp frame sizeo of %d",
+			    -srh_len);
+		goto abort;
+	}
+
+	hike_pr_info("SRH inline popped out (Generic SRH pop supported)");
+#endif
 	/* any offset in hdr_cursor should be considered invalid after this
 	 * point since we change the packet's layout.
 	 *
 	 * TODO: invalidate offsets or evaluate them once again
 	 */
-
 out2:
 	HVM_RET = found;
 	return HIKE_XDP_VM;
