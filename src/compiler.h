@@ -23,6 +23,10 @@
 # define barrier_data(ptr) 	__asm__ __volatile__("": :"r"(ptr) :"memory")
 #endif
 
+#ifndef build_bug_on
+#define build_bug_on(E)		((void)sizeof(char[1 - 2*!!(E)]))
+#endif
+
 #ifndef likely
 #define likely(x)		__builtin_expect(!!(x), 1)
 #endif
