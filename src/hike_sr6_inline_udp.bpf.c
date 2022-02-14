@@ -90,6 +90,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 
 	hike_pr_debug("HIKe VM Packet info");
 	hike_pr_debug("dataoff=%d", cur->dataoff);
+	hike_pr_debug("mhoff=%d\n", cur->mhoff);
 	hike_pr_debug("nhoff=%d", cur->nhoff);
 	hike_pr_debug("thoff=%d", cur->thoff);
 
@@ -112,6 +113,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 
 	hike_pr_debug("HIKe VM Packet info after found IPPROTO_UDP");
 	hike_pr_debug("dataoff=%d", cur->dataoff);
+	hike_pr_debug("mhoff=%d\n", cur->mhoff);
 	hike_pr_debug("nhoff=%d", cur->nhoff);
 	hike_pr_debug("thoff=%d", cur->thoff);
 	hike_pr_debug("pull_len=%d", pull_len);
@@ -347,6 +349,10 @@ out:
 	}
 
 	hike_pr_info("SRH inline popped out");
+
+	/* TODO: re-evaluate the pkt_info pointers as we do when the
+	 * SUPPORT_ANY_EXTHDR_BEFORE_SRH_POP is turned on.
+	 */
 #else
 	/* Supported for the moment only the following layout:
 	 *
@@ -379,7 +385,13 @@ out:
 		goto abort;
 	}
 
-	rc = bpf_xdp_adjust_head(ctx, srh_len);
+	/* thoff and dataoff are still pointing to the UDP layer; since we have
+	 * to remove the SRH, the nhoff as well as the mhoff must be reset.
+	 */
+	cur_mac_header_unset(cur);
+	cur_network_header_unset(cur);
+
+	rc = cur_xdp_adjust_head(ctx, cur, srh_len);
 	if (unlikely(rc < 0)) {
 		hike_pr_err("cannot adjust the xdp frame sizeo of %d",
 			    -srh_len);
@@ -387,12 +399,50 @@ out:
 	}
 
 	hike_pr_info("SRH inline popped out (Generic SRH pop supported)");
-#endif
-	/* any offset in hdr_cursor should be considered invalid after this
-	 * point since we change the packet's layout.
+
+	hike_pr_debug("HIKe VM Packet info after cur_xdp_adjust_header");
+	hike_pr_debug("dataoff=%d", cur->dataoff);
+	hike_pr_debug("mhoff=%d\n", cur->mhoff);
+	hike_pr_debug("nhoff=%d", cur->nhoff);
+	hike_pr_debug("thoff=%d", cur->thoff);
+
+	/* we should set the {mac, network} offsets valid values.
 	 *
-	 * TODO: invalidate offsets or evaluate them once again
+	 * Every time we mangle the packet, we should always keep the hdr
+	 * cursor offsets in a valid state. In this example, we are going to
+	 * parse the mac header and the network header once again (the headers
+	 * that have been moved after the SRH pop operations).
+	 *
+	 * Obviously, parsing such headers ends in a processing overhead :-)
 	 */
+	cur->dataoff = 0;
+	cur_reset_mac_header(cur);
+
+	rc = parse_ethhdr(ctx, cur, NULL);
+	if (unlikely(rc != bpf_ntohs(ETH_P_IPV6))) {
+		hike_pr_err("expected IPv6 proto in mac header after SRH pop");
+		goto abort;
+	}
+
+	cur_reset_network_header(cur);
+
+	rc = parse_ip6hdr(ctx, cur, NULL);
+	if (unlikely(rc < 0)) {
+		hike_pr_err("cannot parse IPv6 Header after SRH pop");
+		goto abort;
+	}
+
+	/* after having parsed the IPv6 header, the thoff and the dataoff must
+	 * be same.
+	 */
+
+	hike_pr_debug("HIKe VM Packet info after re-adjusting hdr cursor");
+	hike_pr_debug("dataoff=%d", cur->dataoff);
+	hike_pr_debug("mhoff=%d\n", cur->mhoff);
+	hike_pr_debug("nhoff=%d", cur->nhoff);
+	hike_pr_debug("thoff=%d", cur->thoff);
+#endif
+
 out2:
 	HVM_RET = found;
 	return HIKE_XDP_VM;
