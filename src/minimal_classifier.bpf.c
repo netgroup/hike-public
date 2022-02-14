@@ -67,6 +67,9 @@ int __hike_classifier(struct xdp_md *ctx)
 	cur = pkt_info_cur(info);
 	cur_init(cur);
 
+	/* set the mac header */
+	cur_reset_mac_header(cur);
+
 	eth_type = parse_ethhdr(ctx, cur, &eth);
 	if (!eth || eth_type < 0)
 		return XDP_ABORTED;	
