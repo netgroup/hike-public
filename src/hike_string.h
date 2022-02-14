@@ -14,7 +14,7 @@
 /* builtin memcpy is not very efficient...
  * let's do it manually in order to avoid dummy misaligned copies... oh!
  */
-#define ___memmove_chunk_8___(BUF, TO, FROM, LEN, TYPE) 		\
+#define ___memmove_chunk___(BUF, TO, FROM, LEN, TYPE) 			\
 do {									\
 	TYPE *__p0, *__p1;						\
 	unsigned int i;							\
@@ -73,8 +73,8 @@ hike_memmove(unsigned char *to, const unsigned char *from, unsigned long len,
 		___side_effect_check_bounds___(LEN);			\
 		goto __L##LEN;
 
-#define ___side_effect_memmove_chunk_8___(LEN, TYPE)			\
-	___memmove_chunk_8___(data, to, from, LEN, TYPE)
+#define ___side_effect_memmove_chunk___(LEN, TYPE)			\
+	___memmove_chunk___(data, to, from, LEN, TYPE)
 
 #define ___CASE_MAX	256
 		build_bug_on(___CASE_MAX != BIT(__HIKE_MEMMOVE_BIT));
@@ -83,15 +83,15 @@ hike_memmove(unsigned char *to, const unsigned char *from, unsigned long len,
 		case ___CASE_MAX:
 			___side_effect_check_bounds___(___CASE_MAX);
 
-/* 256 */		___side_effect_memmove_chunk_8___(128, __u64);
-__L128:			___side_effect_memmove_chunk_8___(64, __u64);
-__L64:			___side_effect_memmove_chunk_8___(32, __u64);
-__L32:			___side_effect_memmove_chunk_8___(16, __u64);
-__L16:			___side_effect_memmove_chunk_8___(8, __u64);
-__L8:			___side_effect_memmove_chunk_8___(4, __u32);
-__L4:			___side_effect_memmove_chunk_8___(2, __u16);
-__L2:			___side_effect_memmove_chunk_8___(1, __u8);
-__L1:			___side_effect_memmove_chunk_8___(1, __u8);
+/* 256 */		___side_effect_memmove_chunk___(128, __u64);
+__L128:			___side_effect_memmove_chunk___(64, __u64);
+__L64:			___side_effect_memmove_chunk___(32, __u64);
+__L32:			___side_effect_memmove_chunk___(16, __u64);
+__L16:			___side_effect_memmove_chunk___(8, __u64);
+__L8:			___side_effect_memmove_chunk___(4, __u32);
+__L4:			___side_effect_memmove_chunk___(2, __u16);
+__L2:			___side_effect_memmove_chunk___(1, __u8);
+__L1:			___side_effect_memmove_chunk___(1, __u8);
 			break;
 		___side_effect_memmove___(128);
 		___side_effect_memmove___(64);
