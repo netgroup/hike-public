@@ -19,22 +19,71 @@ if [ ! -f "${OBJ}" ]; then
 	exit 1
 fi
 
+# =========================
 # --- DO NOT EDIT BELOW ---
+# =========================
 
-SCRIPT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
+readonly SCRIPT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
 HIKE_VM_CORE="${SCRIPT_DIR}/../src/hike_vm.h"
 
-HIKE_CHAIN_NINSN_MAX="$(grep -Eo \
-	"#define[[:blank:]]*HIKE_CHAIN_NINSN_MAX[[:blank:]]*([0-9]+)[[:blank:]]*" ${HIKE_VM_CORE} \
-	| awk '$3 ~ /^[0-9]+$/ {print $3}')"
-if [ -z "${HIKE_CHAIN_NINSN_MAX}" ]; then
-	echo "error: cannot get the max number of insns for the HIKe VM"
+readonly JQ="$(realpath "${SCRIPT_DIR}/../tools/jq-linux64")"
+
+# Try to build the hikevm binary so that we can extract BTF info from that
+readonly BUILD_DIR="${SCRIPT_DIR}/objs"
+readonly HIKEVM_BTF_JSON="${BUILD_DIR}/hikevm.bpf.json"
+readonly MAKE_HIKEVM="$(realpath "${SCRIPT_DIR}/../external/Makefile")"
+readonly NUMCPUS=`grep -c '^processor' /proc/cpuinfo`
+
+# Compile the hikevm binary
+make -f ../external/Makefile -j${NUMCPUS} \
+	prog "HIKE_DIR=../src/" "SRC_DIR=../src/" "PROG=hikevm.bpf.c" \
+	"BUILD=${BUILD_DIR}" || exit $?
+
+if [ ! -f ${HIKEVM_BTF_JSON} ]; then
+	echo "error: cannot locate the ${HIKEVM_BTF_JSON}"
 	exit 1
 fi
 
+# --------------------------------------------------------------------------- #
+# get the ID of the json element which describes the array containing the
+# text instructions of a HIKe Chain.
+___BUFF='.types[] | '
+___BUFF+='select(.kind=="STRUCT" and .name=="hike_chain") | '
+___BUFF+='.members[] | '
+___BUFF+='select(.name=="insns") | '
+___BUFF+='.type_id'
 
-# FIXME: avoid to be harcoded but follow the same approch used for chain NINSN
-HIKE_CHAIN_HEADER_LEN=256 #in bytes
+ELEM_ID="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: an error occurred during btf.json analysis"
+	exit ${RC}
+fi
+
+___BUFF='.types[] | '
+___BUFF+="select(.kind==\"ARRAY\" and .id==${ELEM_ID}) | "
+___BUFF+='.nr_elems'
+
+HIKE_CHAIN_NINSN_MAX="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: an error occurred during btf.json analysis"
+	exit ${RC}
+fi
+# --------------------------------------------------------------------------- #
+# get the offset of the HIKe Chain text section
+___BUFF='.types[] | '
+___BUFF+='select(.kind=="STRUCT" and .name=="hike_chain") | '
+___BUFF+='.members[] | '
+___BUFF+='select(.name=="___sec_text___") | '
+___BUFF+='.bits_offset'
+
+HIKE_CHAIN_SEC_TEXT_OFFBITS="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: an error occurred during btf.json analysis"
+	exit ${RC}
+fi
+# --------------------------------------------------------------------------- #
+
+HIKE_CHAIN_HEADER_LEN=$((HIKE_CHAIN_SEC_TEXT_OFFBITS/8))
 
 TMP_PATH="/tmp"
 

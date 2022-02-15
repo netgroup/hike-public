@@ -596,7 +596,7 @@ struct hike_chain_regmem {
 
 #define __ACCESS_REGMEM_STACK(regmem)	((void *)&(regmem)->stack[0])
 
-/* number of HIKe VM instructions contained in a single HIKe chain */
+/* number of HIKe VM instructions contained in a single HIKe Chain */
 #define HIKE_CHAIN_NINSN_MAX		64
 
 struct hike_chain {
@@ -604,9 +604,11 @@ struct hike_chain {
 	__u16 ninsn;
 	__u16 upc;
 
-	/* registers and private memory for an HIKe Microprogram/Chain */
+	__u8 ___sec_regmem___[0];
+	/* registers and private stack for an HIKe Chain */
 	struct hike_chain_regmem regmem;
 
+	__u8 ___sec_text___[0];
 	/* moving the chain text code outside pcpu memory is slower for a small
 	 * (~32 instructions) chain rather than copy the whole chain and put it
 	 * in pcpu memory.
@@ -830,9 +832,14 @@ bpf_map(hvm_cdata_map, PERCPU_ARRAY, __u32, struct hike_chain_data, 1);
 bpf_map(hvm_chain_map, HASH, __u32, struct hike_chain,
 	HIKE_CHAIN_MAP_NELEM_MAX);
 
-#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	255
+#define HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE	4096
+
+#define HIKE_MEM_BANK_PCPU_SHARED_HDATA_BIT	12
+#define HIKE_MEM_BANK_PCPU_SHARED_HDATA_SIZE	\
+	(BIT(HIKE_MEM_BANK_PCPU_SHARED_HDATA_BIT) - 1)
 struct hike_shared_mem_data {
 	__u8 data[HIKE_MEM_BANK_PCPU_SHARED_DATA_SIZE];
+	__u8 __hvm_data[HIKE_MEM_BANK_PCPU_SHARED_HDATA_SIZE];
 	__u8 reserved;
 };
 
@@ -1506,6 +1513,7 @@ __hike_memory_chain_stack_write(struct hike_chain_data *chain_data, __u64 val,
 		__v = NULL;						\
 	} else {							\
 		__v = (OBJ *)(__p + (OFFSET));				\
+		barrier();						\
 		if (unlikely((unsigned char *)(__v + 1) > 		\
 			      __p + sizeof(struct hike_shared_mem_data)))\
 			__v = NULL;					\

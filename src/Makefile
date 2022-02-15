@@ -14,7 +14,8 @@ HIKE_CFLAGS ?=
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
 # eBPF programs; add more eBPF programs here.
-EBPF_SRC ?= minimal_xdp.bpf.c \
+EBPF_SRC ?= hikevm.bpf.c \
+	    minimal_xdp.bpf.c \
 	    minimal_classifier.bpf.c \
 	    monitor.bpf.c \
 	    ip6_tos_cls.bpf.c \
@@ -39,7 +40,8 @@ EBPF_SRC ?= minimal_xdp.bpf.c \
 	    lse.bpf.c \
 	    l2_redirect.bpf.c \
 	    hike_verbose.bpf.c \
-	    ip6_find_udp.bpf.c
+	    ip6_find_udp.bpf.c \
+	    hike_sr6_inline_udp.bpf.c \
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c
@@ -48,10 +50,10 @@ HIKE_CHAIN_SRC ?= minimal_chain.hike.c
 ###### DO NOT EDIT BELOW ######
 ###############################
 
-EBPF_OBJ := ${EBPF_SRC:.c=.o}
+EBPF_OBJ := ${EBPF_SRC:.bpf.c=.bpf.o}
 EBPF_DST_OBJ := $(addprefix $(OUTPUT)/, $(EBPF_OBJ))
 
-HIKE_CHAIN_OBJ := ${HIKE_CHAIN_SRC:.c=.o}
+HIKE_CHAIN_OBJ := ${HIKE_CHAIN_SRC:.hike.c=.hike.o}
 HIKE_CHAIN_DST_OBJ := $(addprefix $(OUTPUT)/, $(HIKE_CHAIN_OBJ))
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
@@ -102,13 +104,9 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 		    INCLUDEDIR= LIBDIR= UAPIDIR=			      \
 		    install
 
-# Build the absolute SRC path directly from the object filename
-abs_src_path = $(addprefix $(SRC_DIR)/,${1:.o=.c})
-
 $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) \
 				 $(wildcard *.h) vmlinux.h | $(OUTPUT)
 	$(call msg,PROG,$@)
-	@[ ! -d @D ] && mkdir -p $(@D)
 	$(Q)$(CLANG)						\
 		$(CFLAGS)					\
 		-O2 -target bpf 				\
@@ -140,7 +138,6 @@ $(addprefix $(OUTPUT)/,%.bpf.o): $(addprefix $(SRC_DIR)/,%.bpf.c) $(LIBBPF_OBJ) 
 $(addprefix $(OUTPUT)/,%.hike.o): $(addprefix $(SRC_DIR)/,%.hike.c) $(LIBBPF_OBJ) \
 				  $(wildcard %.h) vmlinux.h | $(OUTPUT)
 	$(call msg,CHAIN,$@)
-	@[ ! -d @D ] && mkdir -p $(@D)
 	$(Q)$(CLANG)						\
 		$(CFLAGS)					\
 		-O2 -target bpf 				\

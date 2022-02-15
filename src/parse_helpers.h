@@ -335,11 +335,32 @@ static __always_inline void
 ipv6_addr_sum(__be32 *sum, const struct in6_addr *const addr)
 {
 	const __be16 *const p = (const __be16 *const )addr->in6_u.u6_addr16;
+	__be32 acc = 0;
 	int i;
 
 #pragma unroll
 	for (i = 0; i < 8; ++i)
-		*sum += p[i];
+		acc += p[i];
+
+	/* The barrier_data on 'acc' avoids the compiler to produce code which
+	 * stresses the stack.
+	 * An equivalent solution for solving the same problem would consist of
+	 * performing the sum in the for loop using asm statement as follows:
+	 *
+	 *	acc += p[i]; // can be written like:
+	 *
+	 *	__asm__ __volatile__(
+	 *		"%[r] = *(u16 *)%[p]	\n\t"
+	 *		"%[a] += %[r]		\n\t"
+	 *		: [r] "+r" (reg),
+	 *		  [a] "+r" (acc)
+	 *		: [p] "m" (p[i])
+	 *		: // we are not altering memory here
+	 *	);
+	 */
+	barrier_data(acc);
+
+	*sum += acc;
 }
 
 static __always_inline int
