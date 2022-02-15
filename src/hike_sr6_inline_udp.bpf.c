@@ -21,6 +21,15 @@
 
 #include "hike_string.h"
 
+
+static __always_inline void show_pkt_info(const struct hdr_cursor *cur)
+{
+	hike_pr_debug("dataoff=%d", cur->dataoff);
+	hike_pr_debug("mhoff=%d\n", cur->mhoff);
+	hike_pr_debug("nhoff=%d", cur->nhoff);
+	hike_pr_debug("thoff=%d", cur->thoff);
+}
+
 /* support up to 511 byte to be moved before the SRH inline during the popping
  * operation.
  * If this macro is not defined, we fallback on a simpler pop solution that
@@ -67,7 +76,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 	int rc;
 	int i;
 
-	hike_pr_debug("ID=0x%llx cookie=<%d>", HVM_ARG1, HVM_ARG2);
+	hike_pr_debug(">>> ID=0x%llx cookie=<%d> <<<", HVM_ARG1, HVM_ARG2);
 
 	if (unlikely(!info)) {
 		hike_pr_emerg("cannot access the HIKe VM pkt_info data");
@@ -80,25 +89,28 @@ HIKE_PROG(HIKE_PROG_NAME)
 	/* scratch area on shmem starts after the pkt_info area */
 	shmem_off = sizeof(struct pkt_info);
 
-	/* outer ipv6 */
+	hike_pr_debug("HIKe VM Packet info");
+	show_pkt_info(cur);
+
+	/* we search for the UDP protocol just after the L3 one which should
+	 * be, in this case, the IPv6 protocol.
+	 */
+	offset = cur->nhoff;
+	/* the ipv6_find_hdr checks that the offset points to a valid IPv6
+	 * header, otherwise it returns an error.
+	 */
+	rc = ipv6_find_hdr(ctx, cur, &offset, IPPROTO_UDP, NULL, NULL);
+	if (unlikely(rc < 0)) {
+		hike_pr_info("No valid UDP header was found (rc=%d)", rc);
+		goto out;
+	}
+
+	/* now we can be confident that nhoff points to the IPv6 header */
 	ip6h = (struct ipv6hdr *)cur_header_pointer(ctx, cur, cur->nhoff,
 						    sizeof(*ip6h));
 	if (unlikely(!ip6h)) {
 		hike_pr_err("cannot access the IPv6 header");
 		goto abort;
-	}
-
-	hike_pr_debug("HIKe VM Packet info");
-	hike_pr_debug("dataoff=%d", cur->dataoff);
-	hike_pr_debug("mhoff=%d\n", cur->mhoff);
-	hike_pr_debug("nhoff=%d", cur->nhoff);
-	hike_pr_debug("thoff=%d", cur->thoff);
-
-	offset = 0;
-	rc = ipv6_find_hdr(ctx, cur, &offset, IPPROTO_UDP, NULL, NULL);
-	if (unlikely(rc < 0)) {
-		hike_pr_info("No UDP header found");
-		goto out;
 	}
 
 	/* set the dataoff and transport header to the UDP layer */
@@ -112,10 +124,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 	}
 
 	hike_pr_debug("HIKe VM Packet info after found IPPROTO_UDP");
-	hike_pr_debug("dataoff=%d", cur->dataoff);
-	hike_pr_debug("mhoff=%d\n", cur->mhoff);
-	hike_pr_debug("nhoff=%d", cur->nhoff);
-	hike_pr_debug("thoff=%d", cur->thoff);
+	show_pkt_info(cur);
 	hike_pr_debug("pull_len=%d", pull_len);
 
 	udph = (struct udphdr *)cur_header_pointer(ctx, cur, cur->dataoff,
@@ -401,12 +410,9 @@ out:
 	hike_pr_info("SRH inline popped out (Generic SRH pop supported)");
 
 	hike_pr_debug("HIKe VM Packet info after cur_xdp_adjust_header");
-	hike_pr_debug("dataoff=%d", cur->dataoff);
-	hike_pr_debug("mhoff=%d\n", cur->mhoff);
-	hike_pr_debug("nhoff=%d", cur->nhoff);
-	hike_pr_debug("thoff=%d", cur->thoff);
+	show_pkt_info(cur);
 
-	/* we should set the {mac, network} offsets valid values.
+	/* we should set the {mac, network} offsets to valid values.
 	 *
 	 * Every time we mangle the packet, we should always keep the hdr
 	 * cursor offsets in a valid state. In this example, we are going to
@@ -433,14 +439,11 @@ out:
 	}
 
 	/* after having parsed the IPv6 header, the thoff and the dataoff must
-	 * be same.
+	 * be the same.
 	 */
 
 	hike_pr_debug("HIKe VM Packet info after re-adjusting hdr cursor");
-	hike_pr_debug("dataoff=%d", cur->dataoff);
-	hike_pr_debug("mhoff=%d\n", cur->mhoff);
-	hike_pr_debug("nhoff=%d", cur->nhoff);
-	hike_pr_debug("thoff=%d", cur->thoff);
+	show_pkt_info(cur);
 #endif
 
 out2:
