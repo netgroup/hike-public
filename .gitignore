@@ -1,1 +1,6 @@
 contrib-src/
+/hike-tools/objs
+/src/.output
+/src/notes
+*.swp
+tags
