@@ -77,7 +77,7 @@ ___BUFF='.types[] | '
 ___BUFF+="select(.kind==\"ARRAY\" and .id==${ELEM_ID}) | "
 ___BUFF+='.nr_elems'
 
-HIKE_CHAIN_NINSN_MAX="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+HIKE_CHAIN_NINSN_MAX="$("${JQ}" "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
 if [ ${RC} -ne 0 ]; then
 	echo "error: an error occurred during btf.json analysis"
 	exit ${RC}
@@ -90,7 +90,7 @@ ___BUFF+='.members[] | '
 ___BUFF+='select(.name=="___sec_text___") | '
 ___BUFF+='.bits_offset'
 
-HIKE_CHAIN_SEC_TEXT_OFFBITS="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+HIKE_CHAIN_SEC_TEXT_OFFBITS="$("${JQ}" "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
 if [ ${RC} -ne 0 ]; then
 	echo "error: an error occurred during btf.json analysis"
 	exit ${RC}
