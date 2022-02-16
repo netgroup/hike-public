@@ -1,5 +1,17 @@
 #!/bin/bash
 
+readonly LLVM_OBJCOPY="llvm-objcopy"
+
+# =========================
+# --- DO NOT EDIT BELOW ---
+# =========================
+
+type "${LLVM_OBJCOPY}" &>/dev/null; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: cannot locate \""${LLVM_OBJCOPY}"\""
+	exit 1
+fi
+
 if [ "$#" -ne 5 ]; then
 	echo -e "error: missing args.\n\nExpected args: <obj> <sec> <chain_id> <pinmap> <output>"
 	echo ""
@@ -8,23 +20,18 @@ if [ "$#" -ne 5 ]; then
 	exit 1
 fi
 
-OBJ="$(realpath "$1")"
-SEC="$2"
-CHAIN_ID="$3"
-PINMAP="$4"
-OUTPUT_FILE="$5"
+readonly OBJ="$(realpath "$1")"
+readonly SEC="$2"
+CHAIN_ID="$3"	#may be overwritten using the "auto" chain ID discovery
+readonly PINMAP="$4"
+readonly OUTPUT_FILE="$5"
 
 if [ ! -f "${OBJ}" ]; then
 	echo "error: file object \""${OBJ}"\" does not exist"
 	exit 1
 fi
 
-# =========================
-# --- DO NOT EDIT BELOW ---
-# =========================
-
 readonly SCRIPT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
-HIKE_VM_CORE="${SCRIPT_DIR}/../src/hike_vm.h"
 
 readonly JQ="$(realpath "${SCRIPT_DIR}/../tools/jq-linux64")"
 
@@ -32,12 +39,19 @@ readonly JQ="$(realpath "${SCRIPT_DIR}/../tools/jq-linux64")"
 readonly BUILD_DIR="${SCRIPT_DIR}/objs"
 readonly HIKEVM_BTF_JSON="${BUILD_DIR}/hikevm.bpf.json"
 readonly MAKE_HIKEVM="$(realpath "${SCRIPT_DIR}/../external/Makefile")"
+readonly HIKEVM_DIR="$(realpath "${SCRIPT_DIR}/../src/")"
 readonly NUMCPUS=`grep -c '^processor' /proc/cpuinfo`
 
 # Compile the hikevm binary
-make -f ${SCRIPT_DIR}/../external/Makefile -j${NUMCPUS} \
-	prog "HIKE_DIR=${SCRIPT_DIR}/../src/" "SRC_DIR=${SCRIPT_DIR}/../src/" "PROG=hikevm.bpf.c" \
-	"BUILD=${BUILD_DIR}" || exit $?
+make -f "${MAKE_HIKEVM}" -j${NUMCPUS} \
+	prog "HIKE_DIR=${HIKEVM_DIR}" \
+	"SRC_DIR=${HIKEVM_DIR}" \
+	"PROG=hikevm.bpf.c" \
+	"BUILD=${BUILD_DIR}" 1>/dev/null; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: makefile error ${RC}"
+	exit ${RC}
+fi
 
 if [ ! -f ${HIKEVM_BTF_JSON} ]; then
 	echo "error: cannot locate the ${HIKEVM_BTF_JSON}"
@@ -115,7 +129,8 @@ function write_le16()
 	local off="$3"
 
 	__write_le16 ${value} '' | \
-		xxd -r -p - | dd of="${out}" bs=1 count=2 seek=${off} conv=notrunc
+		xxd -r -p - | \
+		dd of="${out}" bs=1 count=2 seek=${off} conv=notrunc 2>/dev/null
 
 	return 0
 }
@@ -138,7 +153,8 @@ function write_le32()
 	local off="$3"
 
 	__write_le32 ${value} '' | \
-		xxd -r -p - | dd of="${out}" bs=1 count=4 seek=${off} conv=notrunc
+		xxd -r -p - | \
+		dd of="${out}" bs=1 count=4 seek=${off} conv=notrunc 2>/dev/null
 
 	return 0
 }
@@ -164,7 +180,7 @@ function extract_chain_id()
 
 # fill the header with zeros for the whole length of the chain header
 # (i.e.: chain id, ninsn, registers, etc)
-dd if=/dev/zero bs=1 count=${HIKE_CHAIN_HEADER_LEN} of="${TMP_HEADER}"
+dd if=/dev/zero bs=1 count=${HIKE_CHAIN_HEADER_LEN} of="${TMP_HEADER}" 2>/dev/null
 
 if [ "${CHAIN_ID}" == "auto" ]; then
 	CHAIN_ID="$(extract_chain_id "${SEC}")"
@@ -198,7 +214,7 @@ write_le16 "${TMP_HEADER}" ${NINSN} 4
 
 if [ ${PAD} -ge 0 ]; then
 	# Let's pad the binary containing the instructions up to 32 insns in total
-	dd if=/dev/zero bs=1 count=${PAD} >> "${TMP}"
+	dd if=/dev/zero bs=1 count=${PAD} >> "${TMP}" 2>/dev/null
 else
 	echo "error: too many instructions for the HIKe Chain"
 
@@ -227,7 +243,7 @@ cat <<-EOF >"${OUT_ASCII}"
 			${CHAIN_INSN_ASCII}
 EOF
 
-mv -v "${OUT_ASCII}" "${OUTPUT_FILE}"
+mv "${OUT_ASCII}" "${OUTPUT_FILE}"
 chmod a+x "${OUTPUT_FILE}"
 
 __clean

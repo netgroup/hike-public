@@ -34,9 +34,9 @@ function __compile()
 
 		:> "${TMPFILE}"
 
-		${DMPTOOL} "${obj}" "${sechdr}" auto "${map}" "${TMPFILE}" &>/dev/null
+		${DMPTOOL} "${obj}" "${sechdr}" auto "${map}" "${TMPFILE}"
 		if [ $? -ne 0 ]; then
-			echo "error: cannot dump the section \"${sechdr}\""
+			echo "error: an error occurred while processing section \"${sechdr}\""
 			echo ""
 			exit 1
 		fi
@@ -45,7 +45,7 @@ function __compile()
 		echo "" >> "${TMPFILE}"
 
 		dd if="${TMPFILE}" bs=512 conv=notrunc \
-			oflag=append of="${out}" &>/dev/null
+			oflag=append of="${out}" 2>/dev/null
 	done
 
 	rm "${TMPFILE}" 2>/dev/null
