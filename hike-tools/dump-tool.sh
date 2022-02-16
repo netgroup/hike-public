@@ -195,7 +195,13 @@ fi
 # write chain id
 write_le32 "${TMP_HEADER}" ${CHAIN_ID} 0
 
-llvm-objcopy-12 --only-section="${SEC}" "${OBJ}" -O binary "${TMP}"
+"${LLVM_OBJCOPY}" --only-section="${SEC}" "${OBJ}" -O binary "${TMP}"; RC=$?
+if [ ${RC} -ne 0 ]; then
+	"error: an error occurred during \""${LLVM_OBJCOPY}"\" execution"
+
+	__clean;
+	exit 1
+fi
 
 SIZE="$(stat --printf="%s" "${TMP}")"
 
