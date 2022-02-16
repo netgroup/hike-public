@@ -67,7 +67,7 @@ ___BUFF+='.members[] | '
 ___BUFF+='select(.name=="insns") | '
 ___BUFF+='.type_id'
 
-ELEM_ID="$(jq "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
+ELEM_ID="$("${JQ}" "${___BUFF}" "${HIKEVM_BTF_JSON}")"; RC=$?
 if [ ${RC} -ne 0 ]; then
 	echo "error: an error occurred during btf.json analysis"
 	exit ${RC}
