@@ -24,7 +24,6 @@ fi
 # =========================
 
 readonly SCRIPT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
-HIKE_VM_CORE="${SCRIPT_DIR}/../src/hike_vm.h"
 
 readonly JQ="$(realpath "${SCRIPT_DIR}/../tools/jq-linux64")"
 
@@ -32,12 +31,19 @@ readonly JQ="$(realpath "${SCRIPT_DIR}/../tools/jq-linux64")"
 readonly BUILD_DIR="${SCRIPT_DIR}/objs"
 readonly HIKEVM_BTF_JSON="${BUILD_DIR}/hikevm.bpf.json"
 readonly MAKE_HIKEVM="$(realpath "${SCRIPT_DIR}/../external/Makefile")"
+readonly HIKEVM_DIR="$(realpath "${SCRIPT_DIR}/../src/")"
 readonly NUMCPUS=`grep -c '^processor' /proc/cpuinfo`
 
 # Compile the hikevm binary
-make -f ../external/Makefile -j${NUMCPUS} \
-	prog "HIKE_DIR=../src/" "SRC_DIR=../src/" "PROG=hikevm.bpf.c" \
-	"BUILD=${BUILD_DIR}" || exit $?
+make -f "${MAKE_HIKEVM}" -j${NUMCPUS} \
+	prog "HIKE_DIR=${HIKEVM_DIR}" \
+	"SRC_DIR=${HIKEVM_DIR}" \
+	"PROG=hikevm.bpf.c" \
+	"BUILD=${BUILD_DIR}" 1>/dev/null; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: makefile error ${RC}"
+	exit ${RC}
+fi
 
 if [ ! -f ${HIKEVM_BTF_JSON} ]; then
 	echo "error: cannot locate the ${HIKEVM_BTF_JSON}"
