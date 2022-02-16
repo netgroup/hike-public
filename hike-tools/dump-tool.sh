@@ -8,11 +8,11 @@ if [ "$#" -ne 5 ]; then
 	exit 1
 fi
 
-OBJ="$(realpath "$1")"
-SEC="$2"
-CHAIN_ID="$3"
-PINMAP="$4"
-OUTPUT_FILE="$5"
+readonly OBJ="$(realpath "$1")"
+readonly SEC="$2"
+CHAIN_ID="$3"	#may be overwritten using the "auto" chain ID discovery
+readonly PINMAP="$4"
+readonly OUTPUT_FILE="$5"
 
 if [ ! -f "${OBJ}" ]; then
 	echo "error: file object \""${OBJ}"\" does not exist"
