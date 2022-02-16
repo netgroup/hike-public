@@ -1,5 +1,17 @@
 #!/bin/bash
 
+readonly LLVM_OBJCOPY="llvm-objcopy"
+
+# =========================
+# --- DO NOT EDIT BELOW ---
+# =========================
+
+type "${LLVM_OBJCOPY}" &>/dev/null; RC=$?
+if [ ${RC} -ne 0 ]; then
+	echo "error: cannot locate \""${LLVM_OBJCOPY}"\""
+	exit 1
+fi
+
 if [ "$#" -ne 5 ]; then
 	echo -e "error: missing args.\n\nExpected args: <obj> <sec> <chain_id> <pinmap> <output>"
 	echo ""
@@ -18,10 +30,6 @@ if [ ! -f "${OBJ}" ]; then
 	echo "error: file object \""${OBJ}"\" does not exist"
 	exit 1
 fi
-
-# =========================
-# --- DO NOT EDIT BELOW ---
-# =========================
 
 readonly SCRIPT_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
 
