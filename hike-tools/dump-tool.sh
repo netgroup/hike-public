@@ -121,7 +121,8 @@ function write_le16()
 	local off="$3"
 
 	__write_le16 ${value} '' | \
-		xxd -r -p - | dd of="${out}" bs=1 count=2 seek=${off} conv=notrunc
+		xxd -r -p - | \
+		dd of="${out}" bs=1 count=2 seek=${off} conv=notrunc 2>/dev/null
 
 	return 0
 }
@@ -144,7 +145,8 @@ function write_le32()
 	local off="$3"
 
 	__write_le32 ${value} '' | \
-		xxd -r -p - | dd of="${out}" bs=1 count=4 seek=${off} conv=notrunc
+		xxd -r -p - | \
+		dd of="${out}" bs=1 count=4 seek=${off} conv=notrunc 2>/dev/null
 
 	return 0
 }
@@ -170,7 +172,7 @@ function extract_chain_id()
 
 # fill the header with zeros for the whole length of the chain header
 # (i.e.: chain id, ninsn, registers, etc)
-dd if=/dev/zero bs=1 count=${HIKE_CHAIN_HEADER_LEN} of="${TMP_HEADER}"
+dd if=/dev/zero bs=1 count=${HIKE_CHAIN_HEADER_LEN} of="${TMP_HEADER}" 2>/dev/null
 
 if [ "${CHAIN_ID}" == "auto" ]; then
 	CHAIN_ID="$(extract_chain_id "${SEC}")"
@@ -204,7 +206,7 @@ write_le16 "${TMP_HEADER}" ${NINSN} 4
 
 if [ ${PAD} -ge 0 ]; then
 	# Let's pad the binary containing the instructions up to 32 insns in total
-	dd if=/dev/zero bs=1 count=${PAD} >> "${TMP}"
+	dd if=/dev/zero bs=1 count=${PAD} >> "${TMP}" 2>/dev/null
 else
 	echo "error: too many instructions for the HIKe Chain"
 
@@ -233,7 +235,7 @@ cat <<-EOF >"${OUT_ASCII}"
 			${CHAIN_INSN_ASCII}
 EOF
 
-mv -v "${OUT_ASCII}" "${OUTPUT_FILE}"
+mv "${OUT_ASCII}" "${OUTPUT_FILE}"
 chmod a+x "${OUTPUT_FILE}"
 
 __clean
