@@ -35,8 +35,8 @@ readonly MAKE_HIKEVM="$(realpath "${SCRIPT_DIR}/../external/Makefile")"
 readonly NUMCPUS=`grep -c '^processor' /proc/cpuinfo`
 
 # Compile the hikevm binary
-make -f ../external/Makefile -j${NUMCPUS} \
-	prog "HIKE_DIR=../src/" "SRC_DIR=../src/" "PROG=hikevm.bpf.c" \
+make -f ${SCRIPT_DIR}/../external/Makefile -j${NUMCPUS} \
+	prog "HIKE_DIR=${SCRIPT_DIR}/../src/" "SRC_DIR=${SCRIPT_DIR}/../src/" "PROG=hikevm.bpf.c" \
 	"BUILD=${BUILD_DIR}" || exit $?
 
 if [ ! -f ${HIKEVM_BTF_JSON} ]; then
