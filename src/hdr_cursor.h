@@ -239,9 +239,8 @@ cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur,
 {
 	unsigned char *head = xdp_md_head(ctx);
 	unsigned char *tail = xdp_md_tail(ctx);
-	unsigned int __off = off + len;
 
-	if (__off > PROTO_OFF_MAX)
+	if (unlikely(READ_ONCE(off + len) > PROTO_OFF_MAX))
 		return NULL;
 
 	len &= PROTO_OFF_MAX;
@@ -251,7 +250,7 @@ cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur,
 	barrier_data(off);
 
 	/* overflow for the packet */
-	if (!__may_pull(head + off, len, tail))
+	if (unlikely(!__may_pull(head + off, len, tail)))
 		return NULL;
 
 	return head + off;
