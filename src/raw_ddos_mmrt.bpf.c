@@ -90,6 +90,8 @@ int __raw_handle_ipv6(struct xdp_md *ctx, struct hdr_cursor *cur)
 	__u32 *raw_prog_id;
 	int nexthdr;
 
+	//bpf_printk("I'm gonna break'em all");
+
 	nexthdr = parse_ip6hdr(ctx, cur, &ip6h);
 	if (!ip6h || nexthdr < 0)
 		return XDP_PASS;
@@ -184,7 +186,7 @@ int __raw_ipv6_set_ecn(struct xdp_md *ctx)
 	 */
 drop:
 	return XDP_ABORTED;
-}	
+}
 
 #define MON_PCPU_MAP_MAX	1024
 bpf_map(raw_mon_pcpu_map, PERCPU_HASH, __u32, __u64, MON_PCPU_MAP_MAX);
