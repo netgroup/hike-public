@@ -209,6 +209,9 @@ cur_xdp_adjust_head(struct xdp_md *ctx, struct hdr_cursor *cur, int off)
 #define 	__pull(__cur, __len)					\
 			((__cur)->dataoff += (__len))
 
+#define		__push(__cur, __len)					\
+			((__cur)->dataoff -= (__len))
+
 static __always_inline int
 cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, unsigned int len)
 {
