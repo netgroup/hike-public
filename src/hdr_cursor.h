@@ -237,7 +237,8 @@ cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, unsigned int len)
 }
 
 static __always_inline unsigned char *
-cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur,
+cur_header_pointer(struct xdp_md *ctx,
+		   struct hdr_cursor *cur __attribute__((unused)),
 		   unsigned int off, unsigned int len)
 {
 	unsigned char *head = xdp_md_head(ctx);
