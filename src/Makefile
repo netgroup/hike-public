@@ -42,6 +42,7 @@ EBPF_SRC ?= hikevm.bpf.c \
 	    hike_verbose.bpf.c \
 	    ip6_find_udp.bpf.c \
 	    hike_sr6_inline_udp.bpf.c \
+	    hike_sr6_encap.bpf.c \
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c

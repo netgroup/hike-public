@@ -478,3 +478,22 @@ HIKE_CHAIN_1(HIKE_CHAIN_SR6_INLINE_UDP)
 
 	return 0;
 }
+
+#define hike_sr6_encap(nsids,index) \
+	hike_elem_call_3(HIKE_EBPF_PROG_SR6_ENCAP, (nsids), (index))
+
+HIKE_CHAIN_1(HIKE_CHAIN_SR6_ENCAP)
+{
+#if 1
+	const __u16 nsids = 1;
+	const __u64 index = 1;
+
+	hike_sr6_encap(nsids, index);
+
+	ipv6_route();
+#else
+	packet_pass();
+#endif
+
+	return 0;
+}
