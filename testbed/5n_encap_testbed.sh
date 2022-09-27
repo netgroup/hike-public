@@ -207,17 +207,17 @@ read -r -d '' ${NODE}_env <<-EOF
 	ulimit -l unlimited
 
 	# Load the classifier (or the chain bootloader)
-#	mkdir -p /sys/fs/bpf/{progs/init,maps/init}
-#	bpftool prog loadall \
-#		ip6_simple_classifier.o /sys/fs/bpf/progs/init \
-#		type xdp \
-#		pinmaps /sys/fs/bpf/maps/init
-
-	# Load the classifier (or the chain bootloader)
+	mkdir -p /sys/fs/bpf/{progs/init,maps/init}
 	bpftool prog loadall \
-		classifier.o /sys/fs/bpf/progs/init \
+		ip46_simple_classifier.o /sys/fs/bpf/progs/init \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/init
+
+#	# Load the classifier (or the chain bootloader)
+#	bpftool prog loadall \
+#		classifier.o /sys/fs/bpf/progs/init \
+#		type xdp \
+#		pinmaps /sys/fs/bpf/maps/init
 
 	# Load all the progs contained into net.o and pin them on the bpffs.
 	# All HIKe programs *.o must reuse the maps that have been
@@ -277,13 +277,13 @@ read -r -d '' ${NODE}_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/ip6krt
 
 	# Attach the (pinned) classifier to the netdev i21 on the XDP hook.
-#	bpftool net attach xdpdrv	\
-#		pinned /sys/fs/bpf/progs/init/ipv6_simple_classifier	\
-#		dev i21
-
 	bpftool net attach xdpdrv	\
-		pinned /sys/fs/bpf/progs/init/hike_classifier	\
+		pinned /sys/fs/bpf/progs/init/ip46_simp_cls	\
 		dev i21
+
+#	bpftool net attach xdpdrv	\
+#		pinned /sys/fs/bpf/progs/init/hike_classifier	\
+#		dev i21
 
 	# Attach dummy xdp pass program to the netdev i23 XDP hook.
 	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
@@ -319,7 +319,6 @@ read -r -d '' ${NODE}_env <<-EOF
 
 	# =================================================================== #
 
-
 	# HIKe Programs are now loaded, let's move on by loading the HIKe
 	# Chains. First of all we build the HIKe Chain program loader using
 	# the .hike.o object (which contains all the HIKe Chains defined so
@@ -336,16 +335,23 @@ read -r -d '' ${NODE}_env <<-EOF
 	# Load HIKe Chains calling the loader script we just built :-o
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
 
-	# Configure the Loader
-#	bpftool map update \
-#		pinned /sys/fs/bpf/maps/init/ipv6_simple_classifier_map \
-#		key hex		00 00 00 00				\
-#		value hex 	5a 00 00 40
+	# Configure the Loader and HIKe eBPF Programs
+	# =================================================================== #
 
-	# Load the ddos classifier map config for IPv6 addresses
-	bpftool map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
-		key hex		fd 45 00 00 00 00 00 00 00 00 00 00 00 00 00 02 \
+	bpftool map update \
+		pinned /sys/fs/bpf/maps/init/ip46_simp_cls_map	\
+		key hex		01 00 00 00			\
+		value hex 	5b 00 00 40
+
+	bpftool map update \
+		pinned /sys/fs/bpf/maps/init/ip46_simp_cls_map	\
+		key hex		02 00 00 00			\
 		value hex 	5a 00 00 40
+
+#	# Load the ddos classifier map config for IPv6 addresses
+#	bpftool map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
+#		key hex		fd 45 00 00 00 00 00 00 00 00 00 00 00 00 00 02 \
+#		value hex 	5a 00 00 40
 
 
 	# Configure the public SRv6 tunnel source address for the node
@@ -362,6 +368,9 @@ read -r -d '' ${NODE}_env <<-EOF
 		value hex	29 02 04 00 00 00 00 00 \
 				fc 00 00 00 00 00 00 00 \
 				00 00 00 00 00 04 00 d6
+
+	# =================================================================== #
+
 	/bin/bash
 EOF
 
@@ -562,7 +571,7 @@ tmux new-window -t $TMUX -n R2 ip netns exec r2 bash -c "${r2_env}"
 #done
 
 
-tmux send-keys -t $TMUX:DEBUG "scripts/enter-namespace-debug-no-vm.sh" C-m
+# tmux send-keys -t $TMUX:DEBUG "scripts/enter-namespace-debug-no-vm.sh" C-m
 
 tmux new-window -t $TMUX -n R3 ip netns exec r3 bash -c "${r3_env}"
 #tmux new-window -t $TMUX -n R3DA ip netns exec r3 bash -c "python eclatd.py"

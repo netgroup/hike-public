@@ -106,6 +106,8 @@ enum {
 
 #define HIKE_CHAIN_SR6_ENCAP		1073741914 /* 0x4000005a */
 
+#define HIKE_CHAIN_DUMMY_PASS		1073741915 /* 0x4000005b */
+
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 #ifndef TLCL_MAX_DEPTH

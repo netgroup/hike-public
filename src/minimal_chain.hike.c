@@ -497,3 +497,10 @@ HIKE_CHAIN_1(HIKE_CHAIN_SR6_ENCAP)
 
 	return 0;
 }
+
+HIKE_CHAIN_1(HIKE_CHAIN_DUMMY_PASS)
+{
+	packet_pass();
+
+	return 0;
+}
