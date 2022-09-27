@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include <linux/in.h>
+#include <linux/ip.h>
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 #include <linux/ipv6.h>
@@ -143,6 +144,30 @@ parse_ethhdr(struct xdp_md *ctx, struct hdr_cursor *cur, struct ethhdr **ethhdr)
 		cur_pull(ctx, cur, sizeof(*vlh));
 	}
 	return h_proto; /* network-byte-order */
+}
+
+static __always_inline
+int parse_ip4hdr(struct xdp_md *ctx, struct hdr_cursor *cur,
+		 struct iphdr **hdr)
+{
+	struct iphdr *ip4h = (struct iphdr *)cur_data(ctx, cur);
+	int len;
+
+	if (!cur_may_pull(ctx, cur, sizeof(*ip4h)))
+		return -ENOBUFS;
+
+	/* TODO: ip options are not supported at the moment */
+	if (unlikely(ip4h->ihl != 5))
+		return -EOPNOTSUPP;
+
+	len = ip4h->ihl << 4;
+
+	if (hdr)
+		*hdr = ip4h;
+
+	cur_pull(ctx, cur, len);
+
+	return ip4h->protocol;
 }
 
 static __always_inline int
