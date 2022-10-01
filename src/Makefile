@@ -46,7 +46,9 @@ EBPF_SRC ?= hikevm.bpf.c \
 	    raw_ip6_pktcnt.bpf.c \
 	    raw_ip6_fwdacc.bpf.c \
 	    ip46_simple_classifier.bpf.c \
-	    ip6_udport_classifier.bpf.c
+	    ip6_udport862_classifier.bpf.c \
+	    ip6_udport42069_classifier.bpf.c
+
 
 # Hike Chains; add more HIKe Chains here.
 HIKE_CHAIN_SRC ?= minimal_chain.hike.c

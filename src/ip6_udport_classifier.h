@@ -1,9 +1,14 @@
 
-#define UDP_DPORT		862
+#ifndef _IPV6_UDPORT_CLS_H
+#define _IPV6_UDPORT_CLS_H
+
+#ifndef UDP_DPORT
+#error "UDP_DPORT macro must be defined"
+#endif
 
 #define __HIKE_PROG_NAME_PREFIX	ip6_udport
 #define HIKE_PROG_NAME	\
-	EVAL_CAT_4(__HIKE_PROG_NAME_PREFIX, _, UDP_DPORT, _cls)
+	EVAL_CAT_3(__HIKE_PROG_NAME_PREFIX, UDP_DPORT, _cls)
 
 #ifndef HIKE_PRINT_LEVEL
 /* DEBUG level is set by default */
@@ -142,7 +147,7 @@ int ip6_core(struct xdp_md *ctx, struct hdr_cursor *cur, __u16 dport)
 	return udp_filter(ctx, cur, dport);
 }
 
-static __always_inline int parse_packet(struct xdp_md *ctx, __u16 dport)
+static __always_inline int process_packet(struct xdp_md *ctx, __u16 dport)
 {
 	struct hdr_cursor *cur;
 	struct pkt_info *info;
@@ -183,16 +188,4 @@ static __always_inline int parse_packet(struct xdp_md *ctx, __u16 dport)
 	return 0;
 }
 
-IP6_UDPORT_CLS()
-{
-	int rc;
-
-	rc = parse_packet(ctx, UDP_DPORT);
-	if (unlikely(rc)) {
-		hike_pr_err("packet is discarded due an error");
-		return XDP_ABORTED;
-	}
-
-	return XDP_PASS;
-}
-char LICENSE[] SEC("license") = "Dual BSD/GPL";
+#endif

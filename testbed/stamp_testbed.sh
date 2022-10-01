@@ -112,7 +112,7 @@ read -r -d '' sut_env <<-EOF
 	ulimit -l unlimited
 
 	# Load all the classifiers
-	bpftool prog loadall ip6_udport_classifier.o /sys/fs/bpf/progs/init \
+	bpftool prog loadall ip6_udport862_classifier.o /sys/fs/bpf/progs/init \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/init
 
@@ -163,7 +163,7 @@ read -r -d '' sut_env <<-EOF
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
 	bpftool net attach xdpdrv 					\
-		pinned /sys/fs/bpf/progs/init/ip6_udport_862_cls dev enp6s0f0
+		pinned /sys/fs/bpf/progs/init/ip6_udport862_cls dev enp6s0f0
 
 	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rawpass type xdp
 
