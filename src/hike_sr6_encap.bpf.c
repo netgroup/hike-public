@@ -2,7 +2,9 @@
 
 #define HIKE_PROG_NAME sr6_encap
 
-#define HIKE_PRINT_LEVEL	7 /* DEBUG level is set by default */
+#ifndef HIKE_PRINT_LEVEL
+#define HIKE_PRINT_LEVEL HIKE_PRINT_LEVEL_DEBUG
+#endif
 
 #include <stddef.h>
 #include <linux/in.h>
@@ -21,18 +23,28 @@
 #include "hike_vm.h"
 
 #define SR6_OUTER_HOPLIMIT_VALUE	64
-
-#define SR6_ENCAP_SRC_ADDR_INDEX	0
-#define SR6_SRC_TUN_MAP_SIZE		1
 #define SR6_ENCAP_POLICY_MAP_SIZE	128
 
 /* ========================== DO NOT EDIT BELOW =============================*/
+
+#ifndef HIKE_PROG_NAME
+#error "Please define the HIKE_PROG_NAME macro before using this program"
+#endif
+
+/* declare the proto of the function representing the program */
+HIKE_VM_PROG_PROTO(HIKE_PROG_NAME);
+
+#define SR6_ENCAP_SRC_ADDR_INDEX	0
+#define SR6_SRC_TUN_MAP_SIZE		1
 
 /* hashtable map containing the binding between incoming net device and tunnel
  * source address to be set in the outer IPv6 header, once the encap has been
  * carried out.
  */
-bpf_map(sr6_src_tun, HASH, __u32, struct in6_addr, SR6_SRC_TUN_MAP_SIZE);
+#define SRV6_SRC_TUN_MAP sr6_src_tun
+
+bpf_map(SRV6_SRC_TUN_MAP, HASH, __u32, struct in6_addr, SR6_SRC_TUN_MAP_SIZE);
+EXPORT_HIKE_PROG_MAP(HIKE_PROG_NAME, SRV6_SRC_TUN_MAP);
 
 /* just for convenience */
 #define hdr_ptr(ctx, off, size) \
@@ -74,14 +86,16 @@ struct  __DEFINE_SR6_HDR_SIDLIST(N) {			\
 
 #define DEFINE_MAP_SR6_HDR_SIDLIST(N)			\
 	DEFINE_SR6_HDR_SIDLIST(N);			\
-	BPF_MAP_SR6_HDR_SIDLIST(N)
+	BPF_MAP_SR6_HDR_SIDLIST(N);			\
+	EXPORT_HIKE_PROG_MAP(HIKE_PROG_NAME,		\
+			     __BPF_MAP_SR6_HDR_SIDLIST(N))
 
 #define __DO_SRH_ENCAP_FUNC_NAME __do_srh_encap_policy
 
 #define DO_SRH_ENCAP_SIDLIST(NSIDS) static __always_inline int 		\
 EVAL_CAT_3(__DO_SRH_ENCAP_FUNC_NAME, _, NSIDS)(struct xdp_md *ctx,	\
 					       struct hdr_cursor *cur,	\
-					       __u64 *index,		\
+					       __u32 *index,		\
 					       __u8 proto)		\
 {									\
 	DECLARE_SR6_HDR_SIDLIST(*entry, NSIDS);				\
@@ -132,7 +146,7 @@ EVAL_CAT_3(__DO_SRH_ENCAP_FUNC_NAME, _, NSIDS)(struct xdp_md *ctx,	\
 
 #define REGISTER_ENCAP_SIDLIST(NSIDS)					\
 	DEFINE_MAP_SR6_HDR_SIDLIST(NSIDS);				\
-	DO_SRH_ENCAP_SIDLIST(NSIDS)					\
+	DO_SRH_ENCAP_SIDLIST(NSIDS)
 
 REGISTER_ENCAP_SIDLIST(1);
 REGISTER_ENCAP_SIDLIST(2);
@@ -159,7 +173,7 @@ ip6_flow_hdr(struct ipv6hdr *hdr, unsigned int tclass, __be32 flowlabel)
 
 static __always_inline int
 do_srh_encap(struct xdp_md *ctx, struct hdr_cursor *cur, __u16 nsids,
-	     __u64 *index, __u8 proto)
+	     __u32 *index, __u8 proto)
 {
 	int rc;
 
@@ -197,11 +211,11 @@ static __always_inline int set_tun_src(int ifindex, struct ipv6hdr *ip6h)
 {
 	struct in6_addr *sa;
 
-	sa = bpf_map_lookup_elem(&sr6_src_tun, &ifindex);
+	sa = bpf_map_lookup_elem(&SRV6_SRC_TUN_MAP, &ifindex);
 	if (unlikely(!sa)) {
 		hike_pr_err("cannot found src tunnel address for dev <%d>\n",
 			    ifindex);
-		return -ENOENT;
+		return -ENODEV;
 	}
 
 	ip6h->saddr = *sa;
@@ -221,20 +235,21 @@ HIKE_PROG(HIKE_PROG_NAME)
 	__u16 protocol;
 	__u8 nexthdr;
 	int tot_len;
-	__u16 nsegs;
-	__u64 index;
+	__u32 index;
+	__u8 nsegs;
 	int rc;
 
 	/* retrieve input parameters */
-	nsegs = (__u16)HVM_ARG2;
-	index = HVM_ARG3;
+	nsegs = HVM_REG_TO_u8(HVM_ARG2);
+	index = HVM_REG_TO_u32(HVM_ARG3);
 
-	hike_pr_debug(">>> ID=<0x%llx> NSIDS=<%d>, INDEX=<%lld> <<<",
-		      HVM_ARG1, HVM_ARG2, HVM_ARG3);
+	hike_pr_debug(">>> ID=<0x%llx> NSIDS=<%d>, INDEX=<%d> <<<",
+		      HVM_ARG1, nsegs, index);
 
 	info = hike_pcpu_shmem();
 	if (unlikely(!info)) {
 		hike_pr_emerg("cannot access the HIKe VM pkt_info data");
+		rc = -ENOMEM;
 		goto abort;
 	}
 
@@ -247,6 +262,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 	maclen = cur->nhoff - cur->mhoff;
 	if (unlikely(maclen != sizeof(struct ethhdr))) {
 		hike_pr_crit("VLAN not yet supported in ethernet header");
+		rc = -EOPNOTSUPP;
 		goto abort;
 	}
 
@@ -270,6 +286,7 @@ HIKE_PROG(HIKE_PROG_NAME)
 	old_eth = get_ethhdr(ctx, cur);
 	if (unlikely(!old_eth)) {
 eth_err:
+		rc = -EINVAL;
 		hike_pr_err("cannot access to ethernet header");
 		goto abort;
 	}
@@ -281,6 +298,7 @@ eth_err:
 
 		ip4h = get_ipv4hdr(ctx, cur);
 		if (unlikely(!ip4h)) {
+			rc = -EINVAL;
 			hike_pr_err("cannot access to IPv4 header");
 			goto abort;
 		}
@@ -293,6 +311,7 @@ eth_err:
 		ip6h = get_ipv6hdr(ctx, cur);
 		if (unlikely(!ip6h)) {
 ip6_err:
+			rc = -EINVAL;
 			hike_pr_err("cannot access to IPv6 header");
 			goto abort;
 		}
@@ -300,6 +319,7 @@ ip6_err:
 		payload_length = bpf_ntohs(ip6h->payload_len);
 		break;
 	default:
+		rc = -EOPNOTSUPP;
 		hike_pr_err("unsupported protocol <%x>", protocol);
 		goto abort;
 	}
@@ -339,8 +359,14 @@ ip6_err:
 	 * identified by @index.
 	 */
 	rc = do_srh_encap(ctx, cur, nsegs, &index, nexthdr);
-	if (unlikely(rc))
+	if (unlikely(rc)) {
+		if (likely(rc == -ENOENT)) {
+			hike_pr_debug("SRv6 policy not found");
+			goto out;
+		}
+
 		goto abort;
+	}
 
 	/* set the source tunnel address in the outer IPv6 header.
 	 * NOTE: we use an unique tunnel source address for the whole netns.
@@ -349,11 +375,15 @@ ip6_err:
 	if (unlikely(rc))
 		goto abort;
 
-	return HIKE_XDP_VM;
+	rc = 0;
+out:
+	return HVM_PROG_RET(rc, HIKE_XDP_VM);
 
 abort:
-	return XDP_ABORTED;
+	return HVM_PROG_RET(rc, XDP_ABORTED);
 }
-EXPORT_HIKE_PROG_3(HIKE_PROG_NAME, __u16, nsids, __u64, index);
+EXPORT_HIKE_PROG_3(HIKE_PROG_NAME, __u8, nsids, __u32, index);
+
+/* Note: maps have already been exported above, see REGISTER_ENCAP_SIDLIST */
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
