@@ -2316,9 +2316,12 @@ hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 #define __HIKE_VM_PROG_EBPF_NAME(progname)				\
 	EVAL_CAT_3(HIKE_VM_PROG_EBPF_PREFIX, _, progname)
 
+#define HIKE_VM_PROG_PROTO(progname)					\
+	int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)
+
 #define __EXPORT_HIKE_PROG(progname, __HIKE_PROG_SIGNATURE_FUNC__, ...)	\
 __hike_vm_section_tail(progname)					\
-int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)		\
+HIKE_VM_PROG_PROTO(progname)						\
 {									\
 	struct hike_chain_regmem *regmem;				\
 	int rc;								\
