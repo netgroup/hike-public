@@ -2423,6 +2423,18 @@ ___hike_const_export__##constname = { 0, }
 
 #define HVM_RET		HVM_ARG0
 
+#define __HVM_REG_TO_X(TYPE, RV)	((TYPE)(RV))
+#define HVM_REG_TO_u8(RV)		__HVM_REG_TO_X(__u8, RV)
+#define HVM_REG_TO_u16(RV)		__HVM_REG_TO_X(__u16, RV)
+#define HVM_REG_TO_u32(RV)		__HVM_REG_TO_X(__u32, RV)
+#define HVM_REG_TO_u64(RV)		__HVM_REG_TO_X(__u64, RV)
+
+#define HVM_PROG_RET(CODE, ACTION)	\
+({					\
+	HVM_RET = CODE;			\
+	ACTION;				\
+})					\
+
 #define HVM_PTR_RAW(__vaddr, __pptr)					\
 	__hike_virt_to_phys((__vaddr), (__pptr))
 
