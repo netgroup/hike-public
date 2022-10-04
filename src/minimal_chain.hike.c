@@ -484,18 +484,29 @@ HIKE_CHAIN_1(HIKE_CHAIN_SR6_INLINE_UDP)
 
 HIKE_CHAIN_1(HIKE_CHAIN_SR6_ENCAP)
 {
-#if 1
-	const __u16 nsids = 1;
-	const __u64 index = 1;
+	const __u32 index = 1;
+	const __u8 nsids = 1;
+	int rc;
 
-	hike_sr6_encap(nsids, index);
+	/* TODO: HIKe Policy Manager program to be called here */
+
+	rc = hike_sr6_encap(nsids, index);
+	if (rc) {
+		if (rc == -ENOENT) {
+			packet_pass();
+			return 0;
+		}
+
+		/* an unrecoverable error occurred */
+		goto abort;
+	}
 
 	ipv6_route();
-#else
-	packet_pass();
-#endif
-
 	return 0;
+
+abort:
+	packet_drop();
+	return -EINVAL;
 }
 
 HIKE_CHAIN_1(HIKE_CHAIN_DUMMY_PASS)
