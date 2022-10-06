@@ -200,14 +200,19 @@ cur_xdp_adjust_head(struct xdp_md *ctx, struct hdr_cursor *cur, int off)
 	return cur_adjust_proto_offsets(cur, -off);
 }
 
-#define		__may_pull(__ptr, __len, __data_end)			\
-			(((unsigned char *)(__ptr)) + (__len) <= (__data_end))
+#define	__may_pull(ptr, len, ptrend)				\
+({								\
+	unsigned char *____e = (unsigned char *)(ptrend);	\
+	unsigned char *____p = (unsigned char *)(ptr);		\
+								\
+	(____p + (len) <= ____e);				\
+})
 
-#define 	__may_pull_hdr(__hdr, __data_end)			\
-			((__hdr) + 1 <= (__data_end))
+#define __pull(__cur, __len)					\
+		((__cur)->dataoff += (__len))
 
-#define 	__pull(__cur, __len)					\
-			((__cur)->dataoff += (__len))
+#define	__push(__cur, __len)					\
+		((__cur)->dataoff -= (__len))
 
 static __always_inline int
 cur_may_pull(struct xdp_md *ctx, struct hdr_cursor *cur, unsigned int len)
@@ -234,7 +239,8 @@ cur_pull(struct xdp_md *ctx, struct hdr_cursor *cur, unsigned int len)
 }
 
 static __always_inline unsigned char *
-cur_header_pointer(struct xdp_md *ctx, struct hdr_cursor *cur,
+cur_header_pointer(struct xdp_md *ctx,
+		   struct hdr_cursor *cur __attribute__((unused)),
 		   unsigned int off, unsigned int len)
 {
 	unsigned char *head = xdp_md_head(ctx);

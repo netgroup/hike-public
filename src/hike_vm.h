@@ -2316,9 +2316,12 @@ hike_chain_boostrap(struct xdp_md *ctx, __u32 chain_id)
 #define __HIKE_VM_PROG_EBPF_NAME(progname)				\
 	EVAL_CAT_3(HIKE_VM_PROG_EBPF_PREFIX, _, progname)
 
+#define HIKE_VM_PROG_PROTO(progname)					\
+	int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)
+
 #define __EXPORT_HIKE_PROG(progname, __HIKE_PROG_SIGNATURE_FUNC__, ...)	\
 __hike_vm_section_tail(progname)					\
-int __HIKE_VM_PROG_EBPF_NAME(progname)(struct xdp_md *ctx)		\
+HIKE_VM_PROG_PROTO(progname)						\
 {									\
 	struct hike_chain_regmem *regmem;				\
 	int rc;								\
@@ -2419,6 +2422,18 @@ ___hike_const_export__##constname = { 0, }
 #define HVM_ARG4	_I_ARG(4)
 
 #define HVM_RET		HVM_ARG0
+
+#define __HVM_REG_TO_X(TYPE, RV)	((TYPE)(RV))
+#define HVM_REG_TO_u8(RV)		__HVM_REG_TO_X(__u8, RV)
+#define HVM_REG_TO_u16(RV)		__HVM_REG_TO_X(__u16, RV)
+#define HVM_REG_TO_u32(RV)		__HVM_REG_TO_X(__u32, RV)
+#define HVM_REG_TO_u64(RV)		__HVM_REG_TO_X(__u64, RV)
+
+#define HVM_PROG_RET(CODE, ACTION)	\
+({					\
+	HVM_RET = CODE;			\
+	ACTION;				\
+})					\
 
 #define HVM_PTR_RAW(__vaddr, __pptr)					\
 	__hike_virt_to_phys((__vaddr), (__pptr))

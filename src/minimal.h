@@ -71,6 +71,8 @@ enum {
 
 #define HIKE_EBPF_PROG_SR6_INLINE_UDP	34 /* 0x22 */
 
+#define HIKE_EBPF_PROG_SR6_ENCAP	35 /* 0x23 */
+
 /* Chain IDs
  * Each chain ID must have the 30-th bit (counting from 0) SET to 1.
  */
@@ -101,6 +103,10 @@ enum {
 #define HIKE_CHAIN_EVAL_DELAY_ID	1073741912 /* 0x40000058 */
 
 #define HIKE_CHAIN_SR6_INLINE_UDP	1073741913 /* 0x40000059 */
+
+#define HIKE_CHAIN_SR6_ENCAP		1073741914 /* 0x4000005a */
+
+#define HIKE_CHAIN_DUMMY_PASS		1073741915 /* 0x4000005b */
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ RAW ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
