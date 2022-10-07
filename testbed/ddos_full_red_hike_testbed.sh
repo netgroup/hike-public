@@ -37,6 +37,9 @@ ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
 ip -netns sut link add cl0 type veth peer name veth0 netns clt
 
+export HIKECC="../hike-tools/hikecc.sh"; readonly HIKECC
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -112,8 +115,6 @@ ip -netns sut -6 neigh add fc00::1 lladdr 00:00:00:00:01:00 dev enp6s0f0
 ip -netns sut -6 neigh add fc02::1 lladdr 00:00:00:00:01:00 dev enp6s0f0
 
 ip -netns sut -6 neigh add 12:2::1 lladdr 00:00:00:00:01:01 dev enp6s0f1
-
-export HIKECC="../hike-tools/hikecc.sh"
 
 read -r -d '' sut_env <<-EOF
 	# Everything that is private to the bash process that will be launched

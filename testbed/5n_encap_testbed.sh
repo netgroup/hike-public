@@ -90,7 +90,8 @@ ip -netns r2 link add i23 type veth peer name i32 netns r3
 ip -netns r3 link add i34 type veth peer name i43 netns r4
 ip -netns r4 link add i45 type veth peer name i54 netns h5
 
-export HIKECC="../hike-tools/hikecc.sh"
+export HIKECC="../hike-tools/hikecc.sh"; readonly HIKECC
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
 
 ###################
 #### Node: h1 #####
@@ -196,7 +197,7 @@ read -r -d '' ${NODE}_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -208,13 +209,13 @@ read -r -d '' ${NODE}_env <<-EOF
 
 	# Load the classifier (or the chain bootloader)
 	mkdir -p /sys/fs/bpf/{progs/init,maps/init}
-	bpftool prog loadall \
+	${BPFTOOL} prog loadall \
 		ip46_simple_classifier.o /sys/fs/bpf/progs/init \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/init
 
 #	# Load the classifier (or the chain bootloader)
-#	bpftool prog loadall \
+#	${BPFTOOL} prog loadall \
 #		classifier.o /sys/fs/bpf/progs/init \
 #		type xdp \
 #		pinmaps /sys/fs/bpf/maps/init
@@ -228,7 +229,7 @@ read -r -d '' ${NODE}_env <<-EOF
 	# OF THE SAME MAPS AND THEY WILL NOT BE ABLE TO COMMUNICATE WITH EACH
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 
-	bpftool prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass	\
+	${BPFTOOL} prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass	\
 		type xdp	\
 		map name hvm_hprog_map	\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -240,7 +241,7 @@ read -r -d '' ${NODE}_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map	\
 		pinmaps /sys/fs/bpf/maps/hike_pass
 
-	bpftool prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop	\
+	${BPFTOOL} prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop	\
 		type xdp	\
 		map name hvm_hprog_map	\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -252,7 +253,7 @@ read -r -d '' ${NODE}_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map	\
 		pinmaps /sys/fs/bpf/maps/hike_drop
 
-	bpftool prog loadall sr6_encap.o /sys/fs/bpf/progs/sr6enc	\
+	${BPFTOOL} prog loadall sr6_encap.o /sys/fs/bpf/progs/sr6enc	\
 		type xdp	\
 		map name hvm_hprog_map	\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -264,7 +265,7 @@ read -r -d '' ${NODE}_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map	\
 		pinmaps /sys/fs/bpf/maps/sr6enc
 
-	bpftool prog loadall ip6_kroute.o /sys/fs/bpf/progs/ip6krt	\
+	${BPFTOOL} prog loadall ip6_kroute.o /sys/fs/bpf/progs/ip6krt	\
 		type xdp	\
 		map name hvm_hprog_map	\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -277,20 +278,20 @@ read -r -d '' ${NODE}_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/ip6krt
 
 	# Attach the (pinned) classifier to the netdev i21 on the XDP hook.
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/init/ip46_simp_cls	\
 		dev i21
 
-#	bpftool net attach xdpdrv	\
+#	${BPFTOOL} net attach xdpdrv	\
 #		pinned /sys/fs/bpf/progs/init/hike_classifier	\
 #		dev i21
 
 	# Attach dummy xdp pass program to the netdev i23 XDP hook.
-	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
+	${BPFTOOL} prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/rpass
 
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev i23
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
@@ -301,19 +302,19 @@ read -r -d '' ${NODE}_env <<-EOF
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1c 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_pass/hvxdp_hike_pass
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1d 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_drop/hvxdp_hike_drop
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 23 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/sr6enc/hvxdp_sr6_encap
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 19 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/ip6krt/hvxdp_ipv6_kroute
 
@@ -338,31 +339,31 @@ read -r -d '' ${NODE}_env <<-EOF
 	# Configure the Loader and HIKe eBPF Programs
 	# =================================================================== #
 
-	bpftool map update \
+	${BPFTOOL} map update \
 		pinned /sys/fs/bpf/maps/init/ip46_simp_cls_map	\
 		key hex		01 00 00 00			\
 		value hex 	5b 00 00 40
 
-	bpftool map update \
+	${BPFTOOL} map update \
 		pinned /sys/fs/bpf/maps/init/ip46_simp_cls_map	\
 		key hex		02 00 00 00			\
 		value hex 	5a 00 00 40
 
 #	# Load the ddos classifier map config for IPv6 addresses
-#	bpftool map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
+#	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
 #		key hex		fd 45 00 00 00 00 00 00 00 00 00 00 00 00 00 02 \
 #		value hex 	5a 00 00 40
 
 
 	# Configure the public SRv6 tunnel source address for the node
-	bpftool map update \
+	${BPFTOOL} map update \
 		pinned /sys/fs/bpf/maps/sr6enc/sr6_src_tun \
 		key hex		00 00 00 00 \
 		value hex	fc 23 00 00 00 00 00 00 \
 				00 00 00 00 00 00 00 01
 
 	# Configure the SRv6 Encap Policies
-	bpftool map update \
+	${BPFTOOL} map update \
 		pinned /sys/fs/bpf/maps/sr6enc/sr6_encap_policy_1 \
 		key hex		01 00 00 00 \
 		value hex	29 02 04 00 00 00 00 00 \
@@ -411,7 +412,7 @@ read -r -d '' ${NODE}_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -422,11 +423,11 @@ read -r -d '' ${NODE}_env <<-EOF
 	ulimit -l unlimited
 
 	# Attach dummy xdp pass program to the netdev i23 XDP hook.
-	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
+	${BPFTOOL} prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/rpass
 
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev i32
 
 	/bin/bash

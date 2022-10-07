@@ -26,6 +26,8 @@ ip netns add sut
 ip -netns tg link add enp6s0f0 type veth peer name enp6s0f0 netns sut
 ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -119,24 +121,24 @@ read -r -d '' sut_env <<-EOF
 	# Load all the classifiers
 	# ========================
 
-	bpftool prog loadall raw_ddos_mmrt.o /sys/fs/bpf/progs/rawddos type xdp \
+	${BPFTOOL} prog loadall raw_ddos_mmrt.o /sys/fs/bpf/progs/rawddos type xdp \
 		pinmaps /sys/fs/bpf/maps/rawddos
 
-	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rpass type xdp \
+	${BPFTOOL} prog loadall raw_pass.o /sys/fs/bpf/progs/rpass type xdp \
 		pinmaps /sys/fs/bpf/maps/rpass
 
 	# Populate the jmp map (for tail calls)
 	# =====================================
 
-	bpftool map update pinned /sys/fs/bpf/maps/rawddos/raw_jmp_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/rawddos/raw_jmp_map 	\
 		key	hex 01 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/rawddos/raw_ipv6_set_ecn
 
-	bpftool map update pinned /sys/fs/bpf/maps/rawddos/raw_jmp_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/rawddos/raw_jmp_map 	\
 		key	hex 02 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/rawddos/raw_mon_ecn_event
 
-	bpftool map update pinned /sys/fs/bpf/maps/rawddos/raw_jmp_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/rawddos/raw_jmp_map 	\
 		key	hex 03 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/rawddos/raw_ipv6_kroute
 
@@ -144,18 +146,18 @@ read -r -d '' sut_env <<-EOF
 	# ==================================
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/rawddos/raw_classifier dev enp6s0f0
 
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev enp6s0f1
 
 	# Loader/Classifier configuration
 	# ===============================
 
 	# Load the ddos classifier map config for IPv6 addresses
-	bpftool map update pinned /sys/fs/bpf/maps/rawddos/map_ipv6		\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/rawddos/map_ipv6		\
 		key hex		00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 02 \
 		value hex 	01 00 00 00
 
