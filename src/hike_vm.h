@@ -1948,6 +1948,14 @@ __hike_chain_do_exec_one_insn_top(void *ctx, struct hike_chain_data *chain_data,
 #define ___ALU_LOAD_REGS_SIDE_EFFECT___()				\
 ({									\
 	dst_reg = insn->hic_dst;					\
+	/* XXX: it is VERY important for the verifier to set the	\
+	 * reg_val to 0 before doing anything here. Otherwise, the	\
+	 * verifier will complain about an invalid access to this var	\
+	 * which has not been initialized (read before init).		\
+	 * Note that the verifier complains about that when, for	\
+	 * instance, llvm/clang > 12.					\
+	 */ 								\
+	reg_val = 0;							\
 	int __rc;							\
 									\
 	/* select the source: src register or immediate */		\
