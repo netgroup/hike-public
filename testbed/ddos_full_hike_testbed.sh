@@ -26,6 +26,9 @@ ip netns add sut
 ip -netns tg link add enp6s0f0 type veth peer name enp6s0f0 netns sut
 ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
+export HIKECC="../hike-tools/hikecc.sh"; readonly HIKECC
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -98,8 +101,6 @@ ip -netns sut -6 neigh add fc02::1 lladdr 00:00:00:00:01:00 dev enp6s0f0
 
 ip -netns sut -6 neigh add 12:2::1 lladdr 00:00:00:00:01:01 dev enp6s0f1
 
-export HIKECC="../hike-tools/hikecc.sh"
-
 read -r -d '' sut_env <<-EOF
 	# Everything that is private to the bash process that will be launch
 	# mount the bpf filesystem.
@@ -111,7 +112,7 @@ read -r -d '' sut_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -123,7 +124,7 @@ read -r -d '' sut_env <<-EOF
 
 	# Load the classifier (or the chain bootloader)
 	mkdir -p /sys/fs/bpf/{progs/init,maps/init}
-	bpftool prog loadall ip6_simple_classifier.o /sys/fs/bpf/progs/init \
+	${BPFTOOL} prog loadall ip6_simple_classifier.o /sys/fs/bpf/progs/init \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/init
 
@@ -138,7 +139,7 @@ read -r -d '' sut_env <<-EOF
 
 
 	mkdir -p /sys/fs/bpf/{progs/ipv6_hset_srcdst,maps/ipv6_hset_srcdst}
-	bpftool prog loadall ip6_hset_srcdst.o /sys/fs/bpf/progs/ipv6_hset_srcdst \
+	${BPFTOOL} prog loadall ip6_hset_srcdst.o /sys/fs/bpf/progs/ipv6_hset_srcdst \
 		type xdp						\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -151,7 +152,7 @@ read -r -d '' sut_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/ipv6_hset_srcdst
 
 	mkdir -p /sys/fs/bpf/{progs/hike_pass,maps/hike_pass}
-	bpftool prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass \
+	${BPFTOOL} prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass \
 		type xdp						\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -164,7 +165,7 @@ read -r -d '' sut_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/hike_pass
 
 	mkdir -p /sys/fs/bpf/{progs/hike_drop,maps/hike_drop}
-	bpftool prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop \
+	${BPFTOOL} prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop \
 		type xdp						\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -177,7 +178,7 @@ read -r -d '' sut_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/hike_drop
 
 	mkdir -p /sys/fs/bpf/{progs/mon,maps/mon}
-	bpftool prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
+	${BPFTOOL} prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
 		map name hvm_chain_map					\
@@ -189,7 +190,7 @@ read -r -d '' sut_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/mon
 
 	mkdir -p /sys/fs/bpf/{progs/lse,maps/lse}
-	bpftool prog loadall lastevent.o /sys/fs/bpf/progs/lse type xdp	\
+	${BPFTOOL} prog loadall lastevent.o /sys/fs/bpf/progs/lse type xdp	\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
 		map name hvm_chain_map					\
@@ -203,13 +204,13 @@ read -r -d '' sut_env <<-EOF
 	# =================================================================== #
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/init/ipv6_simple_classifier 	\
 		dev enp6s0f0
 
 	# FIXME
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-#	bpftool net attach xdpdrv 					\
+#	${BPFTOOL} net attach xdpdrv 					\
 #		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
@@ -220,23 +221,23 @@ read -r -d '' sut_env <<-EOF
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1b 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/ipv6_hset_srcdst/hvxdp_ipv6_hset_srcdst
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1c 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_pass/hvxdp_hike_pass
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1d 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_drop/hvxdp_hike_drop
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1e 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/lse/hvxdp_pcpu_lse
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 0e 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/mon/hvxdp_pcpu_mon
 
@@ -259,13 +260,13 @@ read -r -d '' sut_env <<-EOF
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
 
 	# Configure the Loader
-	bpftool map update \
+	${BPFTOOL} map update \
 		pinned /sys/fs/bpf/maps/init/ipv6_simple_classifier_map \
 		key hex		00 00 00 00				\
 		value hex 	56 00 00 40
 
 	# Program the IPv6 <src,dst> hashset
-	# bpftool map update \
+	# ${BPFTOOL} map update \
 	# 	pinned /sys/fs/bpf/maps/ipv6_hset_srcdst/ipv6_hset_srcdst_map   \
 	# 	key hex		00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 01 \
 	# 			00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 02 \

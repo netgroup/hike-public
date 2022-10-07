@@ -27,6 +27,9 @@ ip netns add lgs
 ip -netns tg link add enp6s0f0 type veth peer name enp6s0f0 netns sut
 ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
+export HIKECC="../hike-tools/hikecc.sh"; readonly HIKECC
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -87,8 +90,6 @@ ip -netns sut addr add 10.12.1.2/24 dev enp6s0f0
 ip -netns sut addr add 12:2::2/64 dev enp6s0f1
 ip -netns sut addr add 10.12.2.2/24 dev enp6s0f1
 
-export HIKECC="../hike-tools/hikecc.sh"
-
 read -r -d '' sut_env <<-EOF
 	# Everything that is private to the bash process that will be launch
 	# mount the bpf filesystem.
@@ -100,7 +101,7 @@ read -r -d '' sut_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -112,7 +113,7 @@ read -r -d '' sut_env <<-EOF
 	ulimit -l unlimited
 
 	# Load all the classifiers
-	bpftool prog loadall ip6_udport862_classifier.o /sys/fs/bpf/progs/init \
+	${BPFTOOL} prog loadall ip6_udport862_classifier.o /sys/fs/bpf/progs/init \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/init
 
@@ -126,7 +127,7 @@ read -r -d '' sut_env <<-EOF
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 	#
 
-	bpftool prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass	\
+	${BPFTOOL} prog loadall hike_pass.o /sys/fs/bpf/progs/hike_pass	\
 		type xdp						\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -138,7 +139,7 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map	\
 		pinmaps /sys/fs/bpf/maps/hike_pass
 
-	bpftool prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop	\
+	${BPFTOOL} prog loadall hike_drop.o /sys/fs/bpf/progs/hike_drop	\
 		type xdp						\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
@@ -150,7 +151,7 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map	\
 		pinmaps /sys/fs/bpf/maps/hike_drop
 
-	bpftool prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
+	${BPFTOOL} prog loadall monitor.o /sys/fs/bpf/progs/mon type xdp	\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
 		map name hvm_chain_map					\
@@ -162,13 +163,13 @@ read -r -d '' sut_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/mon
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/init/ip6_udport862_cls dev enp6s0f0
 
-	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rawpass type xdp
+	${BPFTOOL} prog loadall raw_pass.o /sys/fs/bpf/progs/rawpass type xdp
 
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-	 bpftool net attach xdpdrv					\
+	 ${BPFTOOL} net attach xdpdrv					\
                 pinned /sys/fs/bpf/progs/rawpass/xdp_pass		\
                 dev enp6s0f1
 
@@ -180,15 +181,15 @@ read -r -d '' sut_env <<-EOF
 	# use the macro value here... but I'm lazy... are YOU brave enough
 	# to do that? :-)
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1c 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_pass/hvxdp_hike_pass
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 1d 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/hike_drop/hvxdp_hike_drop
 
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 0e 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/mon/hvxdp_pcpu_mon
 
@@ -208,7 +209,7 @@ read -r -d '' sut_env <<-EOF
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
 
 	# configure the loader
-	bpftool map update \
+	${BPFTOOL} map update \
 		pinned /sys/fs/bpf/maps/init/ip6_udport_cls_map		\
 		key hex		00 00 00 00				\
 		value hex 	5b 00 00 40

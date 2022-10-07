@@ -27,6 +27,8 @@ ip netns add lgs
 ip -netns tg link add enp6s0f0 type veth peer name enp6s0f0 netns sut
 ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -65,26 +67,26 @@ read -r -d '' tg_env <<-EOF
 	
 	# Load all the progs contained into prog.o and pin them into
 	# progs bpffs. We also pin all the maps on maps bpffs.
-	bpftool prog loadall prog.o /sys/fs/bpf/progs type xdp 		\
+	${BPFTOOL} prog loadall prog.o /sys/fs/bpf/progs type xdp 		\
 		pinmaps /sys/fs/bpf/maps
 
 	# Attach the program xdp_root (pinned) to the netdev enp6s0f0 on the
 	# XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/xdp_root dev enp6s0f0
 
 	# Let's populate the jmp_table so that we can perform tail calls!
-	bpftool map update pinned /sys/fs/bpf/maps/jmp_table 		\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/jmp_table 		\
 		key	hex 01 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/xdp_root
 
-	bpftool map update pinned /sys/fs/bpf/maps/jmp_table 		\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/jmp_table 		\
 		key	hex 02 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/xdp_2
 
 	# xdp_3 can replace program xdp_2
 	# Note that we are using the key 0x02 for overwriting the program.
-	bpftool map update pinned /sys/fs/bpf/maps/jmp_table		\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/jmp_table		\
 		key	hex 02 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/xdp_3
 

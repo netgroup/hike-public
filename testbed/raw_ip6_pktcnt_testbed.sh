@@ -27,6 +27,8 @@ ip netns add lgs
 ip -netns tg link add enp6s0f0 type veth peer name enp6s0f0 netns sut
 ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -106,12 +108,12 @@ read -r -d '' sut_env <<-EOF
 	# Load all the classifiers
 	# ========================
 
-	bpftool prog loadall \
+	${BPFTOOL} prog loadall \
 		raw_ip6_pktcnt.o /sys/fs/bpf/progs/ip6pktcnt \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/ip6pktcnt
 
-	bpftool prog loadall \
+	${BPFTOOL} prog loadall \
 		raw_pass.o /sys/fs/bpf/progs/rpass \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/rpass
@@ -120,15 +122,15 @@ read -r -d '' sut_env <<-EOF
 	# ==================================
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/ip6pktcnt/raw_classifier dev enp6s0f0
 
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev enp6s0f1
 
 	# Load the classifier map config for IPv6 addresses
-	bpftool map update pinned /sys/fs/bpf/maps/ip6pktcnt/ip6_cnt_map	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/ip6pktcnt/ip6_cnt_map	\
 		key hex		00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 02 \
 		value hex 	00 00 00 00
 

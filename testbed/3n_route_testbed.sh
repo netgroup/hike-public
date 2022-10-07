@@ -38,7 +38,8 @@ ip netns add h3
 ip -netns h1 link add i12 type veth peer name i21 netns r2
 ip -netns r2 link add i23 type veth peer name i32 netns h3
 
-export HIKECC="../hike-tools/hikecc.sh"
+export HIKECC="../hike-tools/hikecc.sh"; readonly HIKECC
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
 
 ###################
 #### Node: h1 #####
@@ -115,7 +116,7 @@ read -r -d '' ${NODE}_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -125,12 +126,12 @@ read -r -d '' ${NODE}_env <<-EOF
 	# Load all the classifiers
 	# ========================
 
-	bpftool prog loadall \
+	${BPFTOOL} prog loadall \
 		raw_ip6_fwdacc.o /sys/fs/bpf/progs/ip6fwdacc \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/ip6fwdacc
 
-	bpftool prog loadall \
+	${BPFTOOL} prog loadall \
 		raw_pass.o /sys/fs/bpf/progs/rpass \
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/rpass
@@ -139,18 +140,18 @@ read -r -d '' ${NODE}_env <<-EOF
 	# ==================================
 
 	# Attach the (pinned) classifier to the netdev i21 on the XDP hook.
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/ip6fwdacc/raw_ip6_fwdacc dev i21
 
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev i23
 
 	# Configure the map for packet forwarding
 	# =======================================
 
 	# Load the classifier map config for IPv6 addresses
-	bpftool map update pinned /sys/fs/bpf/maps/ip6fwdacc/ip6_fwd_map \
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/ip6fwdacc/ip6_fwd_map \
 		key hex		fd 23 00 00 00 00 00 00 00 00 00 00 00 00 00 02 \
 		value hex	03 00 00 00 \
 				00 00 00 00 03 02 \
@@ -191,7 +192,7 @@ read -r -d '' ${NODE}_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -202,11 +203,11 @@ read -r -d '' ${NODE}_env <<-EOF
 	ulimit -l unlimited
 
 	# Attach dummy xdp pass program to the netdev i32 XDP hook.
-	bpftool prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
+	${BPFTOOL} prog loadall raw_pass.o /sys/fs/bpf/progs/rpass	\
 		type xdp \
 		pinmaps /sys/fs/bpf/maps/rpass
 
-	bpftool net attach xdpdrv	\
+	${BPFTOOL} net attach xdpdrv	\
 		pinned /sys/fs/bpf/progs/rpass/xdp_pass dev i32
 
 	/bin/bash

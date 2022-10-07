@@ -26,6 +26,8 @@ ip netns add sut
 ip -netns tg link add enp6s0f0 type veth peer name enp6s0f0 netns sut
 ip -netns tg link add enp6s0f1 type veth peer name enp6s0f1 netns sut
 
+export BPFTOOL="../tools/bpftool"; readonly BPFTOOL
+
 ###################
 #### Node: TG #####
 ###################
@@ -111,7 +113,7 @@ read -r -d '' sut_env <<-EOF
 	mount -t bpf bpf /sys/fs/bpf/
 	mount -t tracefs nodev /sys/kernel/tracing
 
-	# With bpftool we cannot pin maps which have been already pinned
+	# With ${BPFTOOL} we cannot pin maps which have been already pinned
 	# on the same bpffs. The same also applies to eBPF programs.
 	# For this reason, we create {init,net} dirs in progs and
 	# {init,net} in maps.
@@ -126,7 +128,7 @@ read -r -d '' sut_env <<-EOF
 	ulimit -l unlimited
 
 	# Load all the classifiers
-	bpftool prog loadall classifier.o /sys/fs/bpf/progs/init type xdp \
+	${BPFTOOL} prog loadall classifier.o /sys/fs/bpf/progs/init type xdp \
 		pinmaps /sys/fs/bpf/maps/init
 
 	# Load all the progs contained into net.o and pin them on the bpffs.
@@ -138,7 +140,7 @@ read -r -d '' sut_env <<-EOF
 	# OF THE SAME MAPS AND THEY WILL NOT BE ABLE TO COMMUNICATE WITH EACH
 	# OTHER!! THAT'S A VERY SUBTLE ISSUE TO FIX UP!
 	#
-	bpftool prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
+	${BPFTOOL} prog loadall net.o /sys/fs/bpf/progs/net type xdp	\
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
 		map name hvm_chain_map					\
@@ -149,7 +151,7 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/net
 
-	bpftool prog loadall ip6_set_ecn.o /sys/fs/bpf/progs/ip6setecn type xdp \
+	${BPFTOOL} prog loadall ip6_set_ecn.o /sys/fs/bpf/progs/ip6setecn type xdp \
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
 		map name hvm_chain_map					\
@@ -160,7 +162,7 @@ read -r -d '' sut_env <<-EOF
 			pinned /sys/fs/bpf/maps/init/hvm_shmem_map \
 		pinmaps /sys/fs/bpf/maps/ip6setecn
 
-	bpftool prog loadall trace_pass.o /sys/fs/bpf/progs/tpass type xdp \
+	${BPFTOOL} prog loadall trace_pass.o /sys/fs/bpf/progs/tpass type xdp \
 		map name hvm_hprog_map					\
 			pinned	/sys/fs/bpf/maps/init/hvm_hprog_map	\
 		map name hvm_chain_map					\
@@ -172,11 +174,11 @@ read -r -d '' sut_env <<-EOF
 		pinmaps /sys/fs/bpf/maps/tpass
 
 	# Attach the (pinned) classifier to the netdev enp6s0f0 on the XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/init/hike_classifier dev enp6s0f0
 
 	# Attach dummy xdp pass program to the netdev enp6s0f1 XDP hook.
-	bpftool net attach xdpdrv 					\
+	${BPFTOOL} net attach xdpdrv 					\
 		pinned /sys/fs/bpf/progs/net/xdp_pass dev enp6s0f1
 
 	# Jump Map configuration (used for carring out tail calls in HIKe VM)
@@ -188,12 +190,12 @@ read -r -d '' sut_env <<-EOF
 	# to do that? :-)
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 17 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/ip6setecn/hvxdp_ipv6_set_ecn
 
 	# Register count packet eBPF/HIKe Program, please see description above ;-)
-	bpftool map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/hvm_hprog_map 	\
 		key	hex 18 00 00 00					\
 		value	pinned /sys/fs/bpf/progs/tpass/hvxdp_trace_pass
 
@@ -214,7 +216,7 @@ read -r -d '' sut_env <<-EOF
 	/bin/bash data/binaries/minimal_chain.hike.load.sh
 
 	# Load the ddos classifier map config for IPv6 addresses
-	bpftool map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
+	${BPFTOOL} map update pinned /sys/fs/bpf/maps/init/map_ipv6		\
 		key hex		00 12 00 01 00 00 00 00 00 00 00 00 00 00 00 02 \
 		value hex 	55 00 00 40
 
